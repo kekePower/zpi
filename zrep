@@ -1,4 +1,7 @@
-#!/usr/local/bin/zsh
+#!/usr/bin/zsh
+
+VERSION="0.0.1" # Sat-2024-02-24
+ZREP="Zsh Repository Tool"
 
 function zrep_fpath() {
     local base_dir="$1"
@@ -16,8 +19,6 @@ function zrep_fpath() {
         fi
     done
 }
-
-#echo "BEGIN: $fpath"
 
 zrep_fpath ${HOME}/bin/include
 
