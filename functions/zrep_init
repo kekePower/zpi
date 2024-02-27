@@ -1,0 +1,43 @@
+autoload -Uz zini
+echo "zrep_init: FPATH: $fpath"
+# Initialize zrep
+zrep_init() {
+    local config_file="$HOME/.zreprc"
+    local zshrc_file="$HOME/.zshrc"
+    local install_dir
+
+    # Check if .zreprc exists
+    if [[ ! -f $config_file ]]; then
+        echo "$config_file not found. Creating it..."
+        # Prompt user for install directory
+        read "?Enter zrep installation directory [$HOME/.zrep]: " install_dir
+        install_dir=${install_dir:-$HOME/.zrep}
+
+        # Write to .zreprc
+        echo "[main]" > $config_file
+        echo "zrep_install_dir = $install_dir" >> $config_file
+    else
+	echo "Running zini $config_file"
+        zini $config_file
+	echo "Setting install_dir"
+        install_dir=${config[zrep_install_dir]}
+	echo "install_dir=${install_dir}"
+    fi
+
+    # Ensure zrep_install_dir exists
+    mkdir -p "$install_dir"
+
+    # Update or add fpath in .zshrc, ensuring no duplicate or empty entries
+    if ! grep -q "fpath=(.*$install_dir)" "$zshrc_file"; then
+        echo "Adding zrep installation directory to fpath in .zshrc..."
+        echo "fpath=('$install_dir' \$fpath)" >> "$zshrc_file"
+        if ! grep -q "^export fpath" "$zshrc_file"; then
+            echo "export fpath" >> "$zshrc_file"
+        fi
+    else
+        echo "zrep installation directory ($install_dir) is already included in fpath."
+    fi
+
+    source ${zshrc_file}
+    echo "zrep initialization complete."
+}

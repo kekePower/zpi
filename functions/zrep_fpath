@@ -1,0 +1,16 @@
+function zrep_fpath() {
+    local base_dir="$1"
+
+    # Check if the base directory exists
+    if [[ ! -d "$base_dir" ]]; then
+        echo "Error: Base directory '$base_dir' does not exist."
+        return 1
+    fi
+
+    # Add directories containing at least one file to fpath
+    for dir in $base_dir/**/*(/N); do
+        if [[ -n $(ls -A "$dir") ]]; then
+            fpath=($dir $fpath)
+        fi
+    done
+}

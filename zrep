@@ -1,0 +1,83 @@
+#!/usr/local/bin/zsh
+
+function zrep_fpath() {
+    local base_dir="$1"
+
+    # Check if the base directory exists
+    if [[ ! -d "$base_dir" ]]; then
+        echo "Error: Base directory '$base_dir' does not exist."
+        return 1
+    fi
+
+    # Add directories containing at least one file to fpath
+    for dir in $base_dir/**/*(/N); do
+        if [[ -n $(ls -A "$dir") ]]; then
+            fpath=($dir $fpath)
+        fi
+    done
+}
+
+#echo "BEGIN: $fpath"
+
+zrep_fpath ${HOME}/bin/include
+
+autoload -Uz zini
+
+# Define the path to .zreprc
+ZREP_CONFIG="$HOME/.zreprc"
+
+# Function to load configuration
+function load_config() {
+autoload -Uz zrep_init
+    if [[ -f "$ZREP_CONFIG" ]]; then
+        # echo ".zreprc found, loading configuration..."
+        zini "$ZREP_CONFIG"
+	zrep_fpath ${config[main_zrep_install_dir]}
+    else
+        if [[ "$1" == "init" ]]; then
+            echo "$ZREP_CONFIG not found. Proceeding with 'zrep init'..."
+            zrep_init
+        else
+            echo "$ZREP_CONFIG not found."
+            # Ask the user if they want to run 'zrep init'
+            read "response?Would you like to run 'zrep init' to set up? (y/n): "
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                zrep_init
+            else
+                echo "Initialization canceled. Please run 'zrep init' manually to set up."
+                exit 1
+            fi
+        fi
+    fi
+}
+
+# Main script logic
+main() {
+    # Load configuration
+    load_config
+
+    # Example command handling structure
+    case "$1" in
+        init)
+	    autoload -Uz zrep_init
+	    zrep_init
+	    zrep_fpath ${config[main_zrep_install_dir]}
+	    exit
+            ;;
+        install)
+            echo "Install function here"
+            ;;
+        update)
+            echo "Update function here"
+            ;;
+        *)
+            echo "Usage: zrep <command> [arguments]"
+            echo "Available commands: init, install, update"
+            ;;
+    esac
+}
+
+# Call main with all passed arguments
+main "$@"
+
+#echo "END: $fpath"
