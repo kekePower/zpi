@@ -228,8 +228,36 @@ function zrep_list_installed_packages() {
     zrep_msg other " - $(jq -r '.[] | "\(.author)/\(.script) (\(.version))"' "$installed_json")"
 }
 
+function zrep_list_package() {
+    local installed_json="${config[main_zrep_install_dir]}/installed.json"
+    local package_names=""
+    
+    # Check if installed.json exists
+    if [[ ! -f "$installed_json" ]]; then
+        echo "No installed packages found."
+        return 0
+    fi
+    
+    # Parse installed.json and concatenate package names
+    while IFS= read -r package_info; do
+        local author=$(jq -r '.author' <<< "$package_info")
+        local script=$(jq -r '.script' <<< "$package_info")
+        local version=$(jq -r '.version' <<< "$package_info")
+        package_names+="$author/$script ($version) "
+    done < <(jq -c '.[]' "$installed_json")
+
+    package_name="$author/$script (${version})"
+}
+
 # Function to load configuration
 function load_config() {
+
+        # Check if jq is available
+    if ! command -v jq &> /dev/null; then
+        echo "Error: 'jq' is not installed. Please install jq to continue."
+        exit 1
+    fi
+
     if [[ -f "$ZREP_CONFIG" ]]; then
         zini "$ZREP_CONFIG"
         zrep_fpath ${config[main_zrep_install_dir]}
@@ -251,7 +279,6 @@ function load_config() {
     fi
 }
 
-# Function to remove a package from installed.json
 function zrep_remove_package() {
     local package_name="$1"
     local installed_json="${config[main_zrep_install_dir]}/installed.json"
@@ -272,22 +299,57 @@ function zrep_remove_package() {
         return 1
     fi
 
+    # Extract author and script from package_name
+    local author script
+    author=$(echo "$package_name" | cut -d '/' -f1)
+    script=$(echo "$package_name" | cut -d '/' -f2)
+
     # Display package information
     echo "Package information:"
     echo "$package_info" | jq .
 
-    # Ask user for confirmation
-    read -q "REPLY?Are you sure you want to remove this package? (y/n) "
+    # Ask user for confirmation with default response "Y"
+    read -q -r "REPLY?Are you sure you want to remove this package? (y/n) " && REPLY="${REPLY:-Y}"
     echo
+
     if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+        
+        # Extract first letter of package_name
+        local first_letter=${package_name:0:1}
+        
         # Remove the package from installed.json
         jq "map(select(.author + \"/\" + .script != \"$package_name\"))" "$installed_json" > "$installed_json.tmp"
         mv "$installed_json.tmp" "$installed_json"
+
+        # Remove the package directory from disk
+        local package_dir="${config[main_zrep_install_dir]}/${first_letter}/${package_name}"
+        if [[ -d "$package_dir" ]]; then
+            rm -rf "$package_dir"
+            echo "Package directory '$package_dir' removed successfully."
+
+            # Check if the author directory is empty and delete it if so
+            local author_dir="${config[main_zrep_install_dir]}/${first_letter}/$author"
+            if [[ $(($#author_dir/*)) -eq 0 ]]; then
+                rm -rf "$author_dir"
+                echo "Author directory '$author_dir' removed successfully."
+
+                # Check if the first letter directory is empty and delete it if so
+                if [[ $(($#first_letter/*)) -eq 0 ]]; then
+                    rm -rf "${config[main_zrep_install_dir]}/$first_letter"
+                    echo "First letter directory '${config[main_zrep_install_dir]}/$first_letter' removed successfully."
+                fi
+            fi
+        else
+            echo "Warning: Package directory '$package_dir' not found."
+        fi
+
         echo "Package '$package_name' removed successfully."
     else
         echo "Removal canceled."
     fi
 }
+
+
 
 # Function to parse installed.json
 function zrep_parse_installed_json() {
@@ -300,9 +362,9 @@ function zrep_help() {
     zrep_msg sub "Usage: zrep <command> [arguments]"
     zrep_msg other "Available commands:"
     zrep_msg other "  init: Initialize zrep"
-    zrep_msg other "  install <package>: Install a package"
-    zrep_msg other "  remove <package>: Remove a package"
-    zrep_msg other "  update: Update zrep"
+    zrep_msg other "  install (i) <package>: Install a package"
+    zrep_msg other "  remove (rm, delete) <package>: Remove a package"
+    zrep_msg other "  update (u): Update zrep"
     zrep_msg other "  version: Display zrep version"
     zrep_msg other "  list: List installed packages"
 }
@@ -312,35 +374,35 @@ function main() {
     load_config
 
     # Example command handling structure
-    case "$1" in
+    case "${1}" in
         init)
     	    zrep_init
     	    zrep_fpath ${config[main_zrep_install_dir]}
     	    exit
             ;;
-        install)
+        install | i)
             zrep_msg info "Install function here"
             zrep_install_package ${1}
             ;;
-        remove)
+        remove | delete | rm)
             # Parse the command argument to extract the package name
-            zrep_remove_package_name="${1:-}"
+            zrep_remove_package_name="${2:-}"
             if [[ -z "$zrep_remove_package_name" ]]; then
                 echo "Usage: zrep remove package_name"
             else
                 zrep_remove_package "$zrep_remove_package_name"
             fi
             ;;
-        update)
+        update | u)
             zrep_msg info "Update function here"
             ;;
-        version)
+        version | -v | --version)
             zrep_version
             ;;
         list)
             zrep_list_installed_packages
             ;;
-        help)
+        help | -h | --help)
             zrep_help
             ;;
         *)
