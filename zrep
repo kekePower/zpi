@@ -307,8 +307,6 @@ function zrep_help() {
     zrep_msg other "  list: List installed packages"
 }
 
-
-# Main script logic
 function main() {
 
     load_config
