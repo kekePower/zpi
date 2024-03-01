@@ -81,6 +81,7 @@ function zrep_msg() {
 }
 
 function zrep_init() {
+
     local config_file="$HOME/.zreprc"
     local zshrc_file="$HOME/.zshrc"
     local install_dir
@@ -119,10 +120,12 @@ function zrep_init() {
 
     source ${zshrc_file}
     echo "zrep initialization complete."
+
 }
 
 # Function to parse remote JSON data and extract author, script, and version
 function zrep_parse_remote() {
+
     local url="$1"
     local json_data
     
@@ -146,6 +149,7 @@ function zrep_parse_remote() {
 
 # Function to write to installed.json after successful install
 function zrep_update_installed_json() {
+
     local author="$1"
     local script="$2"
     local version="$3"
@@ -169,6 +173,7 @@ function zrep_update_installed_json() {
     echo "$json_object" >> "$json_file"
     
     echo "Package '$script' by '$author' version $version installed successfully."
+
 }
 
 
@@ -211,10 +216,12 @@ function zrep_install_package() {
     
     # Clean up: Remove the downloaded zip file
     rm "$zipFile"
+
 }
 
 # Function to list installed packages from installed.json
 function zrep_list_installed_packages() {
+
     local installed_json="${config[main_zrep_install_dir]}/installed.json"
     
     # Check if installed.json exists
@@ -226,9 +233,11 @@ function zrep_list_installed_packages() {
     # Parse installed.json and list packages
     zrep_msg main "\nInstalled packages:"
     zrep_msg other " - $(jq -r '.[] | "\(.author)/\(.script) (\(.version))"' "$installed_json")"
+
 }
 
 function zrep_list_package() {
+
     local installed_json="${config[main_zrep_install_dir]}/installed.json"
     local package_names=""
     
@@ -247,6 +256,7 @@ function zrep_list_package() {
     done < <(jq -c '.[]' "$installed_json")
 
     package_name="$author/$script (${version})"
+
 }
 
 # Function to load configuration
@@ -277,9 +287,11 @@ function load_config() {
             fi
         fi
     fi
+
 }
 
 function zrep_remove_package() {
+
     local package_name="$1"
     local installed_json="${config[main_zrep_install_dir]}/installed.json"
 
@@ -347,26 +359,31 @@ function zrep_remove_package() {
     else
         echo "Removal canceled."
     fi
+
 }
 
 
 
 # Function to parse installed.json
 function zrep_parse_installed_json() {
-    local installed_json="${config[main_zrep_install_dir]}/installed.json"
-    jq -c '.' "$installed_json"
+
+  local installed_json="${config[main_zrep_install_dir]}/installed.json"
+  jq -c '.' "$installed_json"
+
 }
 
 # Help function to display available options
 function zrep_help() {
-    zrep_msg sub "Usage: zrep <command> [arguments]"
-    zrep_msg other "Available commands:"
-    zrep_msg other "  init: Initialize zrep"
-    zrep_msg other "  install (i) <package>: Install a package"
-    zrep_msg other "  remove (rm, delete) <package>: Remove a package"
-    zrep_msg other "  update (u): Update zrep"
-    zrep_msg other "  version: Display zrep version"
-    zrep_msg other "  list: List installed packages"
+
+  zrep_msg sub "Usage: zrep <command> [arguments]"
+  zrep_msg other "Available commands:"
+  zrep_msg other "  init: Initialize zrep"
+  zrep_msg other "  install (i) <package>: Install a package"
+  zrep_msg other "  remove (rm, delete) <package>: Remove a package"
+  zrep_msg other "  update (u): Update zrep"
+  zrep_msg other "  version: Display zrep version"
+  zrep_msg other "  list: List installed packages"
+
 }
 
 function main() {
