@@ -1,5 +1,7 @@
 #!/usr/bin/zsh
 
+setopt extendedglob
+
 VERSION="0.0.1" # Sat-2024-02-24
 ZREP="Zsh Repository Tool"
 # Define the path to .zreprc
@@ -142,38 +144,28 @@ function zrep_parse_remote() {
     export script
     export version
     
-    # local dlurl="https://kekepower.com/zrep/download.php?a=${author}&s=${script}&v=${version}"
-    # echo "zrep_parse_remote: ${dlurl}"
+    local dlurl="https://kekepower.com/zrep/download.php?a=${author}&s=${script}&v=${version}"
+    echo "zrep_parse_remote: ${dlurl}"
 
 }
 
 # Function to write to installed.json after successful install
 function zrep_update_installed_json() {
-
     local author="$1"
     local script="$2"
     local version="$3"
     local json_file="${config[main_zrep_install_dir]}/installed.json"
-    
-    # Check if installed.json exists, create it if not
-    if [[ ! -f "$json_file" ]]; then
-        echo '[]' >| "$json_file"
-    fi
-    
-    # Create JSON object
-    local json_object='{"author":"'$author'", "script":"'$script'", "version":"'$version'"}'
-    
-    # Check if the entry already exists in installed.json
-    if grep -q "$json_object" "$json_file"; then
-        echo "Package '$script' by '$author' version $version is already installed."
-        return 0
-    fi
-    
-    # Add the entry to installed.json
-    echo "$json_object" >> "$json_file"
-    
-    echo "Package '$script' by '$author' version $version installed successfully."
 
+    # Create JSON object
+    local json_object='{"script":"'$script'", "version":"'$version'"}'
+
+    # Use jq to update installed.json (nested  structure)
+    jq --argjson obj "$json_object" '
+        .[$obj.author] |= .[$obj.author] + [$obj]  # Add to authors array
+        | . + {($obj.author): []}  # Create author entry if it does not exist
+    ' "$json_file" > "$json_file.tmp" && mv "$json_file.tmp" "$json_file"
+
+    echo "Package '$script' by '$author' version $version installed successfully."
 }
 
 # Function to list installed packages from installed.json
@@ -231,9 +223,10 @@ function zrep_list_package() {
 }
 
 # Function to load configuration
+# shellcheck disable=SC2120
 function load_config() {
 
-        # Check if jq is available
+    # Check if jq is available
     if ! command -v jq &> /dev/null; then
         echo "Error: 'jq' is not installed. Please install jq to continue."
         exit 1
@@ -313,7 +306,7 @@ function zrep_remove_package() {
                 echo "Author directory '$author_dir' removed successfully."
 
                 # Check if the first letter directory is empty and delete it if so
-                if [[ -d "${config[main_zrep_install_dir]}/$first_letter" && ! *(D) "${config[main_zrep_install_dir]}/$first_letter" ]]; then
+                if [[ -d "${config[main_zrep_install_dir]}/$first_letter" && -f "${config[main_zrep_install_dir]}/$first_letter/.[!.]*" ]]; then
                     rm -rf "${config[main_zrep_install_dir]}/$first_letter"
                     echo "First letter directory '${config[main_zrep_install_dir]}/$first_letter' removed successfully."
                 fi
@@ -382,21 +375,147 @@ function zrep_parse_installed_json() {
 
 }
 
+function zrep_enable() {
+    local package_name="$1"
+    local installed_json="${config[main_zrep_install_dir]}/installed.json"
+    local author="${package_name%/*}"
+    local script="${package_name#*/}"
+    local first_letter=$(echo "$author" | cut -c 1 | tr '[:upper:]' '[:lower:]')
+    local addon_path="${config[main_zrep_install_dir]}/$first_letter/$author/$script"
+
+    # Check if the package is installed
+    if [[ ! -f "$installed_json" ]] || ! jq -e ".[] | select(.author == \"$author\" and .script == \"$script\")" "$installed_json" &>/dev/null; then
+        echo "Error: Package '$package_name' is not installed."
+        return 1
+    fi
+
+    # Load existing addons from .zrep_addons
+    source ~/.zrep_addons
+
+    # Check if the addon is already enabled
+    local addon_exists=0
+    for addon in "${addons[@]}"; do
+        if [[ "$addon" == "$addon_path" ]]; then
+            addon_exists=1
+            break
+        fi
+    done
+
+    if ((addon_exists)); then
+        echo "Package '$package_name' is already enabled."
+        return 0
+    fi
+
+    # Add addon path to the array
+    addons+=("$addon_path")
+
+    # Update .zrep_addons file
+    {
+        echo "addons=("
+        for addon in "${addons[@]}"; do
+            echo "  '$addon'"
+        done
+        echo ")"
+        echo
+        echo 'if [[ -n ${addons[@]} ]]; then'
+        echo '    local addon_paths'
+        echo '    for addon in "${addons[@]}"; do'
+        echo '        addon_paths+="$addon "'
+        echo '    done'
+        echo '    fpath=($addon_paths $fpath)'
+        echo '    export fpath'
+        echo '    # echo "fpath updated with enabled addons."'
+        echo 'else'
+        echo '    echo "zrep: No addons enabled."'
+        echo 'fi'
+    } > ${HOME}/.zrep_addons
+
+    source ${HOME}/.zshrc
+
+    echo "Package '$package_name' has been enabled and added to fpath."
+}
+
+function zrep_disable() {
+    local package_name="$1"
+    local installed_json="${config[main_zrep_install_dir]}/installed.json"
+    local author="${package_name%/*}"
+    local script="${package_name#*/}"
+    local first_letter=$(echo "$author" | cut -c 1 | tr '[:upper:]' '[:lower:]')
+    local addon_path="${config[main_zrep_install_dir]}/$first_letter/$author/$script"
+
+    # Load existing addons from .zrep_addons
+    source ${HOME}/.zrep_addons
+
+    # Initialize a new array for addons
+    local new_addons=()
+
+    # Flag to check if addon was found and removed
+    local found=0
+
+    # Iterate through existing addons
+    for addon in "${addons[@]}"; do
+        if [[ "$addon" == "$addon_path" ]]; then
+            found=1
+        else
+            new_addons+=("$addon")
+        fi
+    done
+
+    if ((found == 0)); then
+        echo "Package '$package_name' is not currently enabled."
+        return 0
+    fi
+
+    # Update the addons array
+    addons=("${new_addons[@]}")
+
+    # Update .zrep_addons file with the new array
+    {
+        echo "addons=("
+        for addon in "${addons[@]}"; do
+            echo "  '$addon'"
+        done
+        echo ")"
+        echo
+        echo 'if [[ -n ${addons[@]} ]]; then'
+        echo '    local addon_paths'
+        echo '    for addon in "${addons[@]}"; do'
+        echo '        addon_paths+="$addon "'
+        echo '    done'
+        echo '    fpath=($addon_paths $fpath)'
+        echo '    export fpath'
+        echo '    # echo "fpath updated with enabled addons."'
+        echo 'else'
+        echo '    echo "zrep: No addons enabled."'
+        echo 'fi'
+    } > ${HOME}/.zrep_addons
+
+    source ${HOME}/.zshrc
+
+    # Remove the addon path from $fpath
+    fpath=(${fpath[@]/#$addon_path})
+    export fpath
+
+    echo "Package '$package_name' has been disabled and removed from fpath."
+}
+
 # Help function to display available options
 function zrep_help() {
 
   zrep_msg sub "Usage: zrep <command> [arguments]"
   zrep_msg other "Available commands:"
   zrep_msg other "  init: Initialize zrep"
-  zrep_msg other "  install (i) <package>: Install a package"
-  zrep_msg other "  remove (rm, delete) <package>: Remove a package"
-  zrep_msg other "  update (u): Update zrep"
+  zrep_msg other "  install (i) <author/package>: Install a package"
+  zrep_msg other "  remove (rm, delete) <author/package>: Remove a package"
+  zrep_msg other "  update (u) <author/package>: Update zrep package"
   zrep_msg other "  version: Display zrep version"
   zrep_msg other "  list: List installed packages"
 
 }
 
 function main() {
+
+  echo "${magenta}${blue_bg} ${ZREP} ${end}${bold_white}${blue_bg}${VERSION} ${end}"
 
     load_config
 
@@ -432,13 +551,17 @@ function main() {
         help | -h | --help)
             zrep_help
             ;;
+        enable)
+            zrep_enable ${2}
+            ;;
+        disable)
+            zrep_disable ${2}
+            ;;
         *)
             zrep_help
             ;;
     esac
 }
-
-echo "${magenta}${blue_bg} ${ZREP} ${end}${bold_white}${blue_bg}${VERSION} ${end}"
 
 # Call main with all passed arguments
 main "$@"
