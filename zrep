@@ -313,7 +313,7 @@ function zrep_remove_package() {
                 echo "Author directory '$author_dir' removed successfully."
 
                 # Check if the first letter directory is empty and delete it if so
-                if [[ $(($#first_letter/*)) -eq 0 ]]; then
+                if [[ -d "${config[main_zrep_install_dir]}/$first_letter" && ! *(D) "${config[main_zrep_install_dir]}/$first_letter" ]]; then
                     rm -rf "${config[main_zrep_install_dir]}/$first_letter"
                     echo "First letter directory '${config[main_zrep_install_dir]}/$first_letter' removed successfully."
                 fi
