@@ -176,64 +176,35 @@ function zrep_update_installed_json() {
 
 }
 
-
-# Function to install a package by unzipping it to ${config[main_zrep_install_dir]}
-function zrep_install_package() {
-    
-    zrep_parse_remote "https://kekepower.com/zrep/packages.json"
-    
-    # Construct the download URL
-    local dlurl="https://kekepower.com/zrep/download.php?a=${author}&s=${script}&v=${version}"
-    echo "${dlurl}"
-    # exit
-    
-    # Get the base directory where the package will be installed
-    local baseDir="${config[main_zrep_install_dir]}/"
-    
-    # Create the directory if it doesn't exist
-    mkdir -p "$baseDir"
-    
-    # Download the package zip file
-    local zipFile="/tmp/${author}_${package}_${version}.zip"
-    curl -s -o "$zipFile" "$dlurl"
-    
-    # Check if the download was successful
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to download the package."
-        return 1
-    fi
-    
-    # Unzip the package to the installation directory
-    unzip -q "$zipFile" -d "$baseDir"
-    
-    # Check if the unzip operation was successful
-    if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to unzip the package."
-        return 1
-    else
-        zrep_update_installed_json "$author" "$script" "$version"
-    fi
-    
-    # Clean up: Remove the downloaded zip file
-    rm "$zipFile"
-
-}
-
 # Function to list installed packages from installed.json
 function zrep_list_installed_packages() {
-
     local installed_json="${config[main_zrep_install_dir]}/installed.json"
-    
+
     # Check if installed.json exists
     if [[ ! -f "$installed_json" ]]; then
         echo "No installed packages found."
         return 0
     fi
-    
-    # Parse installed.json and list packages
-    zrep_msg main "\nInstalled packages:"
-    zrep_msg other " - $(jq -r '.[] | "\(.author)/\(.script) (\(.version))"' "$installed_json")"
 
+    # Parse installed.json and list packages
+    zrep_msg sub "\nInstalled packages:"
+
+    # Iterate through each package (read lines from jq output)
+    while IFS= read -r package_info; do
+        local package_name=$(echo "$package_info" | awk '{print $1}')  # Extract package name
+        local is_active="${white}(${end}${red}Inactive${end}${white})${end}"  # Set default to Inactive
+        # echo "DEBUG 1: is_active=${is_active}"
+
+        # Check if the package is active (only modify if active)
+        if grep -q "$package_name" ~/.zrep_addons; then
+            is_active="${white}(${end}${bold_green}Active${end}${white})${end}"
+            # echo "DEBUG 2: is_active=${is_active}"
+        fi
+
+        # echo "$package_info $is_active"
+
+        zrep_msg other " - $package_info $is_active"
+    done < <(jq -r '.[] | "\(.author)/\(.script) (\(.version))"' "$installed_json")
 }
 
 function zrep_list_package() {
@@ -328,10 +299,6 @@ function zrep_remove_package() {
         
         # Extract first letter of package_name
         local first_letter=${package_name:0:1}
-        
-        # Remove the package from installed.json
-        jq "map(select(.author + \"/\" + .script != \"$package_name\"))" "$installed_json" > "$installed_json.tmp"
-        mv "$installed_json.tmp" "$installed_json"
 
         # Remove the package directory from disk
         local package_dir="${config[main_zrep_install_dir]}/${first_letter}/${package_name}"
@@ -341,7 +308,7 @@ function zrep_remove_package() {
 
             # Check if the author directory is empty and delete it if so
             local author_dir="${config[main_zrep_install_dir]}/${first_letter}/$author"
-            if [[ $(($#author_dir/*)) -eq 0 ]]; then
+            if [[ -d "$author_dir" && ! -f "$author_dir/*" ]]; then
                 rm -rf "$author_dir"
                 echo "Author directory '$author_dir' removed successfully."
 
@@ -351,6 +318,10 @@ function zrep_remove_package() {
                     echo "First letter directory '${config[main_zrep_install_dir]}/$first_letter' removed successfully."
                 fi
             fi
+            # Remove the package from installed.json (if everything else was successful)
+            jq "map(select(.author + \"/\" + .script != \"$package_name\"))" "$installed_json" > "$installed_json.tmp"
+            mv "$installed_json.tmp" "$installed_json"
+            echo "Package '$package_name' removed successfully."
         else
             echo "Warning: Package directory '$package_dir' not found."
         fi
@@ -362,8 +333,47 @@ function zrep_remove_package() {
 
 }
 
+# Function to install a package by unzipping it to ${config[main_zrep_install_dir]}
+function zrep_install_package() {
 
+    zrep_parse_remote "https://kekepower.com/zrep/packages.json"
 
+    # Construct the download URL
+    local dlurl="https://kekepower.com/zrep/download.php?a=${author}&s=${script}&v=${version}"
+    echo "${dlurl}"
+    # exit
+
+    # Get the base directory where the package will be installed
+    local baseDir="${config[main_zrep_install_dir]}/"
+
+    # Create the directory if it doesn't exist
+    mkdir -p "$baseDir"
+
+    # Download the package zip file
+    local zipFile="/tmp/${author}_${package}_${version}.zip"
+    curl -s -o "$zipFile" "$dlurl"
+
+    # Check if the download was successful
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to download the package."
+        return 1
+    fi
+
+    # Unzip the package to the installation directory
+    unzip -q "$zipFile" -d "$baseDir"
+
+    # Check if the unzip operation was successful
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to unzip the package."
+        return 1
+    else
+        zrep_update_installed_json "$author" "$script" "$version"
+    fi
+
+    # Clean up: Remove the downloaded zip file
+    rm "$zipFile"
+
+}
 # Function to parse installed.json
 function zrep_parse_installed_json() {
 
