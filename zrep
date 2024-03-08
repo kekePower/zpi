@@ -85,46 +85,59 @@ function zrep_msg() {
 }
 
 function zrep_init() {
-
-    local config_file="$HOME/.zreprc"
     local zshrc_file="$HOME/.zshrc"
+    local addons_file="$HOME/.zrep_addons"
     local install_dir
 
     # Check if .zreprc exists
-    if [[ ! -f $config_file ]]; then
-        echo "$config_file not found. Creating it..."
+    if [[ ! -f $ZREP_CONFIG ]]; then
+        echo "$ZREP_CONFIG not found. Creating it..."
         # Prompt user for install directory
-        read "?Enter zrep installation directory [$HOME/.zrep]: " install_dir
-        install_dir=${install_dir:-$HOME/.zrep}
+        read "install_dir?Enter zrep installation directory [$HOME/.zrep]: "
+        install_dir=${install_dir:-"$HOME/.zrep"}
 
         # Write to .zreprc
-        echo "[main]" > $config_file
-        echo "zrep_install_dir = $install_dir" >> $config_file
+        echo "[main]" > $ZREP_CONFIG
+        echo "zrep_install_dir='$install_dir'" >> "$ZREP_CONFIG"
     else
-        echo "Running zini $config_file"
-        zini $config_file
-        echo "Setting install_dir"
-        install_dir=${config[zrep_install_dir]}
-        echo "install_dir=${install_dir}"
+        echo "Loading configuration from $ZREP_CONFIG"
+        zini $ZREP_CONFIG
+        install_dir=${config[main_zrep_install_dir]}
     fi
 
     # Ensure zrep_install_dir exists
     mkdir -p "$install_dir"
 
-    # Update or add fpath in .zshrc, ensuring no duplicate or empty entries
-    if ! grep -q "fpath=(.*$install_dir)" "$zshrc_file"; then
-        echo "Adding zrep installation directory to fpath in .zshrc..."
-        echo "fpath=('$install_dir' \$fpath)" >> "$zshrc_file"
-        if ! grep -q "^export fpath" "$zshrc_file"; then
-            echo "export fpath" >> "$zshrc_file"
-        fi
-    else
-        echo "zrep installation directory ($install_dir) is already included in fpath."
+    # Check if .zshrc already sources .zrep_addons, if not, add it
+    if ! grep -q "source $addons_file" "$zshrc_file"; then
+        echo "Adding source command for .zrep_addons to .zshrc..."
+        echo "source $addons_file" >> "$zshrc_file"
     fi
 
-    source ${zshrc_file}
-    echo "zrep initialization complete."
+    # Create or update the .zrep_addons file
+    if [[ ! -f $addons_file ]]; then
+        echo "Creating file $addons_file..."
+        cat > "$addons_file" <<EOF
+# Source the .addons file from the zrep installation directory
+source "${install_dir}/.addons"
 
+# If addons array is defined and not empty, add its elements to fpath
+if [[ -n \${addons[@]} ]]; then
+    for addon in "\${addons[@]}"; do
+        if [[ -d \$addon ]] && [[ ! " \${fpath[*]} " =~ " \$addon " ]]; then
+            fpath=(\$addon "\${fpath[@]}")  # Prepend the new addon to fpath
+        fi
+    done
+else
+    echo "zrep: No addons enabled."
+fi
+EOF
+        echo "File .zrep_addons created and configured."
+    else
+        echo "File .zrep_addons already exists. Review manually if update is needed."
+    fi
+
+    echo "zrep initialization complete."
 }
 
 # Function to parse remote JSON data and extract author, script, and version
@@ -193,7 +206,7 @@ function zrep_list_installed_packages() {
         local is_active="${colors[white]}(${colors[end]}${colors[red]}Inactive${colors[end]}${colors[white]})${colors[end]}"  # Set default to Inactive
 
         # Check if the package is active (only modify if active)
-        if grep -q "$package_name" ~/.zrep_addons; then
+        if grep -q "$package_name" ${config[main_zrep_install_dir]}/.addons; then
             is_active="${colors[white]}(${colors[end]}${colors[bold_green]}Active${colors[end]}${colors[white]})${colors[end]}"
         fi
 
@@ -225,8 +238,7 @@ function zrep_list_package() {
 }
 
 # Function to load configuration
-# shellcheck disable=SC2120
-function load_config() {
+function zrep_load_config() {
 
     # Check if jq is available
     if ! command -v jq &> /dev/null; then
@@ -370,7 +382,7 @@ function zrep_parse_installed_json() {
 }
 
 function zrep_parse_package_name() {
-    echo "Looking for package ${1}"
+    # echo "Looking for package ${1}"
     package_name="$1"
     installed_json="${config[main_zrep_install_dir]}/installed.json"
     author="${package_name%/*}"
@@ -392,8 +404,13 @@ function zrep_enable() {
     # Assuming zrep_parse_package_name sets 'addon_path' correctly
     # and 'package_name' is in 'author/script' format
 
-    # Load existing addons from .zrep_addons
-    source ~/.zrep_addons
+    # Initialize addons array if .zrep_addons does not exist
+    if [ ! -f "${config[main_zrep_install_dir]}/.addons" ]; then
+        addons=()
+    else
+        # Load existing addons from ${config[main_zrep_install_dir]}/.addons
+        source "${config[main_zrep_install_dir]}/.addons"
+    fi
 
     # Check if the addon is already enabled
     local addon_exists=0
@@ -419,27 +436,14 @@ function zrep_enable() {
             echo "  '$addon'"
         done
         echo ")"
-        echo
-        echo 'if [[ -n ${addons[@]} ]]; then'
-        echo '    local unique_addons=()'
-        echo '    for addon in "${addons[@]}"; do'
-        echo '        if [[ ! " ${fpath[@]} " =~ " ${addon} " ]]; then'
-        echo '            unique_addons+=("$addon")'
-        echo '        fi'
-        echo '    done'
-        echo '    if [[ ${#unique_addons[@]} -gt 0 ]]; then'
-        echo '        fpath=("${unique_addons[@]}" $fpath)'
-        echo '    fi'
-        echo '    export fpath'
-        echo 'else'
-        echo '    echo "zrep: No addons enabled."'
-        echo 'fi'
-    } > ${HOME}/.zrep_addons
+    } > "${config[main_zrep_install_dir]}/.addons"
 
     # Source the updated .zrep_addons to apply changes
-    source ${HOME}/.zrep_addons
+    source "${HOME}/.zrep_addons"
+    autoload -Uz "${script}"
 
-    echo "Package '$package_name' has been enabled and added to fpath."
+    zrep_msg info "\nPackage '$package_name' has been enabled and added to fpath."
+    zrep_msg info "You may have to run 'source ~/.zrep_addons' to get access to it."
 }
 
 function zrep_disable() {
@@ -449,8 +453,13 @@ function zrep_disable() {
     # Assuming zrep_parse_package_name sets 'addon_path' correctly
     # and 'package_name' is in 'author/script' format
 
-    # Load existing addons from .zrep_addons
-    source ${HOME}/.zrep_addons
+    # Initialize addons array if .zrep_addons does not exist
+    if [ ! -f "${config[main_zrep_install_dir]}/.addons" ]; then
+        addons=()
+    else
+        # Load existing addons from ${config[main_zrep_install_dir]}/.addons
+        source "${config[main_zrep_install_dir]}/.addons"
+    fi
 
     # Initialize a new array for addons
     local new_addons=()
@@ -468,7 +477,7 @@ function zrep_disable() {
     done
 
     if ((found == 0)); then
-        echo "Package '$package_name' is not currently enabled."
+        zrep_msg debug "\nPackage '$package_name' is not currently enabled."
         return 0
     fi
 
@@ -479,27 +488,14 @@ function zrep_disable() {
             echo "  '$addon'"
         done
         echo ")"
-        echo
-        echo 'if [[ -n ${addons[@]} ]]; then'
-        echo '    local unique_addons=()'
-        echo '    for addon in "${addons[@]}"; do'
-        echo '        if [[ ! " ${fpath[@]} " =~ " ${addon} " ]]; then'
-        echo '            unique_addons+=("$addon")'
-        echo '        fi'
-        echo '    done'
-        echo '    if [[ ${#unique_addons[@]} -gt 0 ]]; then'
-        echo '        fpath=("${unique_addons[@]}" $fpath)'
-        echo '    fi'
-        echo '    export fpath'
-        echo 'else'
-        echo '    echo "zrep: No addons enabled."'
-        echo 'fi'
-    } > ${HOME}/.zrep_addons
+    } > ${config[main_zrep_install_dir]}/.addons
 
     # Source the updated .zrep_addons to apply changes
     source ${HOME}/.zrep_addons
+    unfunction ${script} 2>/dev/null || true
 
-    echo "Package '$package_name' has been disabled and removed from fpath."
+    zrep_msg info "\nPackage '$package_name (${script})' has been disabled and removed from fpath."
+    zrep_msg info "You may have to run 'source ~/.zrep_addons' to remove it from your shell."
 }
 
 # Help function to display available options
@@ -544,7 +540,7 @@ function main() {
 
   zrep_main_version_string
 
-    load_config
+    zrep_load_config
 
     # Check if the second argument is "help" and the first argument is not empty
     if [[ "${2}" == "help" && -n "${1}" ]]; then
@@ -586,9 +582,11 @@ function main() {
             ;;
         enable)
             zrep_enable ${2}
+            source "${HOME}/.zrep_addons"
             ;;
         disable)
             zrep_disable ${2}
+            source "${HOME}/.zrep_addons"
             ;;
         *)
             zrep_help
