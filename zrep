@@ -548,18 +548,17 @@ function main() {
     case "${1}" in
         init)
     	    zrep_init
-    	    zrep_fpath ${config[main_zrep_install_dir]}
+    	    # zrep_fpath ${config[main_zrep_install_dir]}
     	    exit
             ;;
         install | i)
-            zrep_msg info "Install function here"
             zrep_install_package ${1}
             ;;
         remove | delete | rm)
             # Parse the command argument to extract the package name
             zrep_remove_package_name="${2:-}"
             if [[ -z "${zrep_remove_package_name}" ]]; then
-                echo "Usage: zrep remove author/package"
+                echo "Usage: zrep ${1} author/package"
             else
                 zrep_remove_package "${zrep_remove_package_name}"
             fi
@@ -578,11 +577,9 @@ function main() {
             ;;
         enable)
             zrep_enable ${2}
-            source "${HOME}/.zrep_addons"
             ;;
         disable)
             zrep_disable ${2}
-            source "${HOME}/.zrep_addons"
             ;;
         *)
             zrep_help
