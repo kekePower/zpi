@@ -5,23 +5,21 @@ setopt extendedglob
 VERSION="0.0.1" # Sat-2024-02-24
 ZREP="Zsh Repository Tool"
 # Define the path to .zreprc
-ZREP_CONFIG="$HOME/.zreprc"
-
-# echo "START: $fpath"
+ZREP_CONFIG="${HOME}/.zreprc"
 
 function zrep_fpath() {
-    local base_dir="$1"
+    local base_dir="${1}"
 
     # Check if the base directory exists
-    if [[ ! -d "$base_dir" ]]; then
-        echo "Error: Base directory '$base_dir' does not exist."
+    if [[ ! -d "${base_dir}" ]]; then
+        echo "Error: Base directory '${base_dir}' does not exist."
         return 1
     fi
 
     # Add directories containing at least one file to fpath
-    for dir in $base_dir/**/*(/N); do
-        if [[ -n $(ls -A "$dir/") ]]; then
-            fpath=($dir $fpath)
+    for dir in ${base_dir}/**/*(/N); do
+        if [[ -n $(ls -A "${dir}/") ]]; then
+            fpath=(${dir} $fpath)
         fi
     done
 }
@@ -85,47 +83,49 @@ function zrep_msg() {
 }
 
 function zrep_init() {
-    local zshrc_file="$HOME/.zshrc"
-    local addons_file="$HOME/.zrep_addons"
+    local zshrc_file="${HOME}/.zshrc"
+    local addons_file="${HOME}/.zrep_addons"
     local install_dir
 
     # Check if .zreprc exists
-    if [[ ! -f $ZREP_CONFIG ]]; then
-        echo "$ZREP_CONFIG not found. Creating it..."
+    if [[ ! -f ${ZREP_CONFIG} ]]; then
+        echo "${ZREP_CONFIG} not found. Creating it..."
         # Prompt user for install directory
-        read "install_dir?Enter zrep installation directory [$HOME/.zrep]: "
-        install_dir=${install_dir:-"$HOME/.zrep"}
+        read "install_dir?Enter zrep installation directory [${HOME}/.zrep]: "
+        install_dir=${install_dir:-"${HOME}/.zrep"}
 
         # Write to .zreprc
-        echo "[main]" > $ZREP_CONFIG
-        echo "zrep_install_dir='$install_dir'" >> "$ZREP_CONFIG"
+        echo "[main]" > ${ZREP_CONFIG}
+        echo "zrep_install_dir='${install_dir}'" >> "${ZREP_CONFIG}"
     else
-        echo "Loading configuration from $ZREP_CONFIG"
-        zini $ZREP_CONFIG
+        echo "Loading configuration from ${ZREP_CONFIG}"
+        zini ${ZREP_CONFIG}
         install_dir=${config[main_zrep_install_dir]}
     fi
 
     # Ensure zrep_install_dir exists
-    mkdir -p "$install_dir"
+    mkdir -p "${install_dir}/functions/zini"
+    curl -s https://raw.githubusercontent.com/kekePower/zini/main/zini -o "${install_dir}/functions/zini/zini"
+    echo "fpath=(${install_dir}/functions/zini \$fpath)" >> ${zshrc_file}
 
     # Check if .zshrc already sources .zrep_addons, if not, add it
-    if ! grep -q "source $addons_file" "$zshrc_file"; then
+    if ! grep -q "source ${addons_file}" "${zshrc_file}"; then
         echo "Adding source command for .zrep_addons to .zshrc..."
-        echo "source $addons_file" >> "$zshrc_file"
+        echo "source ${addons_file}" >> "${zshrc_file}"
     fi
 
     # Create or update the .zrep_addons file
-    if [[ ! -f $addons_file ]]; then
-        echo "Creating file $addons_file..."
-        cat > "$addons_file" <<EOF
+    if [[ ! -f ${addons_file} ]]; then
+        echo "Creating file ${addons_file}..."
+        cat > "${addons_file}" <<EOF
 # Source the .addons file from the zrep installation directory
 source "${install_dir}/.addons"
 
 # If addons array is defined and not empty, add its elements to fpath
 if [[ -n \${addons[@]} ]]; then
     for addon in "\${addons[@]}"; do
-        if [[ -d \$addon ]] && [[ ! " \${fpath[*]} " =~ " \$addon " ]]; then
-            fpath=(\$addon "\${fpath[@]}")  # Prepend the new addon to fpath
+        if [[ -d \${addon} ]] && [[ ! " \${fpath[*]} " =~ " \${addon} " ]]; then
+            fpath=(\${addon} "\${fpath[@]}")  # Prepend the new addon to fpath
         fi
     autoload -Uz $(basename ${addon})
     done
@@ -144,48 +144,45 @@ EOF
 # Function to parse remote JSON data and extract author, script, and version
 function zrep_parse_remote() {
 
-    local url="$1"
+    local url="${1}"
     local json_data
     
     # Fetch JSON data from the URL
-    json_data=$(curl -s "$url")
+    json_data=$(curl -s "${url}")
 
     # Extract author, script, and version using jq
-    author=$(echo "$json_data" | jq -r '.authors[0].name')
-    script=$(echo "$json_data" | jq -r '.authors[0].scripts[0].name')
-    version=$(echo "$json_data" | jq -r '.authors[0].scripts[0].version')
+    author=$(echo "${json_data}" | jq -r '.authors[0].name')
+    script=$(echo "${json_data}" | jq -r '.authors[0].scripts[0].name')
+    version=$(echo "${json_data}" | jq -r '.authors[0].scripts[0].version')
     
     # Set the variables as global
     export author
     export script
     export version
-    
-    # local dlurl="https://kekepower.com/zrep/download.php?a=${author}&s=${script}&v=${version}"
-    # echo "zrep_parse_remote: ${dlurl}"
 
 }
 
 # Function to write to installed.json after successful install
 function zrep_update_installed_json() {
-    local author="$1"
-    local script="$2"
-    local version="$3"
+    local author="${1}"
+    local script="${2}"
+    local version="${3}"
     local json_file="${config[main_zrep_install_dir]}/installed.json"
 
     # Check if the JSON file exists and create it if not
-    if [[ ! -f "$json_file" ]]; then
-        echo "{}" > "$json_file"  # Initialize with an empty object
+    if [[ ! -f "${json_file}" ]]; then
+        echo "{}" > "${json_file}"  # Initialize with an empty object
     fi
 
     # Proper jq command to update the JSON
-    jq --arg author "$author" --arg script "$script" --arg version "$version" \
-      'if .[$author] then
-         .[$author] += [{"script": $script, "version": $version}]
+    jq --arg author "${author}" --arg script "${script}" --arg version "${version}" \
+      'if .[${author}] then
+         .[${author}] += [{"script": ${script}, "version": ${version}}]
        else
-         .[$author] = [{"script": $script, "version": $version}]
-       end' "$json_file" > "$json_file.tmp" && mv "$json_file.tmp" "$json_file"
+         .[${author}] = [{"script": ${script}, "version": ${version}}]
+       end' "${json_file}" > "${json_file}.tmp" && mv "${json_file}.tmp" "${json_file}"
 
-    zrep_msg info "Package '$script' by '$author' version $version installed successfully."
+    zrep_msg info "Package '${script}' by '${author}' version ${version} installed successfully."
 }
 
 # Function to list installed packages from installed.json
@@ -193,7 +190,7 @@ function zrep_list_installed_packages() {
     local installed_json="${config[main_zrep_install_dir]}/installed.json"
 
     # Check if installed.json exists
-    if [[ ! -f "$installed_json" ]]; then
+    if [[ ! -f "${installed_json}" ]]; then
         zrep_msg debug "No installed packages found."
         return 0
     fi
@@ -202,16 +199,16 @@ function zrep_list_installed_packages() {
     zrep_msg sub "\nInstalled packages:"
 
     # Iterate through each author and their packages
-    jq -r 'to_entries | .[] | .key as $author | .value[] | "\($author)/\(.script) (\(.version))"' "$installed_json" | while IFS= read -r package_info; do
-        local package_name=$(echo "$package_info" | cut -d ' ' -f1)  # Extract package name before the version
+    jq -r 'to_entries | .[] | .key as ${author} | .value[] | "\(${author})/\(.script) (\(.version))"' "${installed_json}" | while IFS= read -r package_info; do
+        local package_name=$(echo "${package_info}" | cut -d ' ' -f1)  # Extract package name before the version
         local is_active="${colors[white]}(${colors[end]}${colors[bold_red]}Inactive${colors[end]}${colors[white]})${colors[end]}"  # Set default to Inactive
 
         # Check if the package is active (only modify if active)
-        if grep -q "$package_name" ${config[main_zrep_install_dir]}/.addons; then
+        if grep -q "${package_name}" ${config[main_zrep_install_dir]}/.addons; then
             is_active="${colors[white]}(${colors[end]}${colors[bold_green]}Active${colors[end]}${colors[white]})${colors[end]}"
         fi
 
-        zrep_msg info " - $package_info $is_active"
+        zrep_msg info " - ${package_info} ${is_active}"
     done
 }
 
@@ -220,19 +217,19 @@ function zrep_list_package() {
     local package_names=""
 
     # Check if installed.json exists
-    if [[ ! -f "$installed_json" ]]; then
+    if [[ ! -f "${installed_json}" ]]; then
         echo "No installed packages found."
         return 0
     fi
 
     # Parse installed.json and concatenate package names
-    jq -r 'to_entries[] | .key as $author | .value[] | "\($author)/\(.script) (\(.version))"' "$installed_json" | while IFS= read -r package_info; do
-        package_names+="$package_info "
+    jq -r 'to_entries[] | .key as ${author} | .value[] | "\(${author})/\(.script) (\(.version))"' "${installed_json}" | while IFS= read -r package_info; do
+        package_names+="${package_info} "
     done
 
     # Assuming you want to print out the concatenated package names
-    if [[ -n "$package_names" ]]; then
-        echo "Installed packages: $package_names"
+    if [[ -n "${package_names}" ]]; then
+        echo "Installed packages: ${package_names}"
     else
         echo "No packages found."
     fi
@@ -247,18 +244,18 @@ function zrep_load_config() {
         exit 1
     fi
 
-    if [[ -f "$ZREP_CONFIG" ]]; then
-        zini "$ZREP_CONFIG"
+    if [[ -f "${ZREP_CONFIG}" ]]; then
+        zini "${ZREP_CONFIG}"
         zrep_fpath ${config[main_zrep_install_dir]}
     else
-        if [[ "$1" == "init" ]]; then
-            echo "$ZREP_CONFIG not found. Proceeding with 'zrep init'..."
+        if [[ "${1}" == "init" ]]; then
+            echo "${ZREP_CONFIG} not found. Proceeding with 'zrep init'..."
             zrep_init
         else
-            echo "$ZREP_CONFIG not found."
+            echo "${ZREP_CONFIG} not found."
             # Ask the user if they want to run 'zrep init'
             read "response?Would you like to run 'zrep init' to set up? (y/n): "
-            if [[ "$response" =~ ^[Yy]$ ]]; then
+            if [[ "${response}" =~ ^[Yy]$ ]]; then
                 zrep_init
             else
                 echo "Initialization canceled. Please run 'zrep init' manually to set up."
@@ -270,62 +267,62 @@ function zrep_load_config() {
 }
 
 function zrep_remove_package() {
-    local package_name="$1"
+    local package_name="${1}"
     local installed_json="${config[main_zrep_install_dir]}/installed.json"
 
     # Check if installed.json exists
-    if [[ ! -f "$installed_json" ]]; then
+    if [[ ! -f "${installed_json}" ]]; then
         echo "Error: installed.json not found."
         return 1
     fi
 
     # Get package information from installed.json
     local package_info
-    package_info=$(zrep_parse_installed_json | jq ".[] | select(.author + \"/\" + .script == \"$package_name\")")
+    package_info=$(zrep_parse_installed_json | jq ".[] | select(.author + \"/\" + .script == \"${package_name}\")")
 
     # Check if the package is installed
-    if [[ -z "$package_info" ]]; then
-        echo "Error: Package '$package_name' is not installed."
+    if [[ -z "${package_info}" ]]; then
+        echo "Error: Package '${package_name}' is not installed."
         return 1
     fi
 
-    local author=$(echo "$package_info" | jq -r '.author')
-    local script=$(echo "$package_info" | jq -r '.script')
-    local first_letter=$(echo "$author" | cut -c 1 | tr '[:upper:]' '[:lower:]')
-    local package_dir="${config[main_zrep_install_dir]}/$first_letter/$author/$script"
+    local author=$(echo "${package_info}" | jq -r '.author')
+    local script=$(echo "${package_info}" | jq -r '.script')
+    local first_letter=$(echo "${author}" | cut -c 1 | tr '[:upper:]' '[:lower:]')
+    local package_dir="${config[main_zrep_install_dir]}/${first_letter}/${author}/${script}"
 
     echo "Package information:"
-    echo "$package_info" | jq .
+    echo "${package_info}" | jq .
 
     # Ask user for confirmation with default response "Y"
     read "REPLY?Are you sure you want to remove this package? (y/n) [Y]: "
     REPLY=${REPLY:-Y}
     echo
 
-    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+    if [[ "${REPLY}" =~ ^[Yy]$ ]]; then
         # Remove the package directory from disk
-        if [[ -d "$package_dir" ]]; then
-            rm -rf "$package_dir"
-            echo "Package directory '$package_dir' removed successfully."
+        if [[ -d "${package_dir}" ]]; then
+            rm -rf "${package_dir}"
+            echo "Package directory '${package_dir}' removed successfully."
         else
-            echo "Warning: Package directory '$package_dir' not found."
+            echo "Warning: Package directory '${package_dir}' not found."
         fi
 
         # Safely check and remove author and first letter directories if empty
-        local author_dir="${config[main_zrep_install_dir]}/$first_letter/$author"
-        if [[ -d "$author_dir" && ! "$(ls -A "$author_dir")" ]]; then
-            rmdir "$author_dir"
-            echo "Author directory '$author_dir' removed successfully."
+        local author_dir="${config[main_zrep_install_dir]}/${first_letter}/${author}"
+        if [[ -d "${author_dir}" && ! "$(ls -A "${author_dir}")" ]]; then
+            rmdir "${author_dir}"
+            echo "Author directory '${author_dir}' removed successfully."
         fi
 
-        if [[ -d "${config[main_zrep_install_dir]}/$first_letter" && ! "$(ls -A "${config[main_zrep_install_dir]}/$first_letter")" ]]; then
-            rmdir "${config[main_zrep_install_dir]}/$first_letter"
-            echo "First letter directory '${config[main_zrep_install_dir]}/$first_letter' removed successfully."
+        if [[ -d "${config[main_zrep_install_dir]}/${first_letter}" && ! "$(ls -A "${config[main_zrep_install_dir]}/${first_letter}")" ]]; then
+            rmdir "${config[main_zrep_install_dir]}/${first_letter}"
+            echo "First letter directory '${config[main_zrep_install_dir]}/${first_letter}' removed successfully."
         fi
 
         # Remove the package from installed.json
-        jq "del(.[] | select(.author == \"$author\" and .script == \"$script\"))" "$installed_json" > "$installed_json.tmp" && mv "$installed_json.tmp" "$installed_json"
-        echo "Package '$package_name' removed successfully from installed.json."
+        jq "del(.[] | select(.author == \"${author}\" and .script == \"${script}\"))" "${installed_json}" > "${installed_json}.tmp" && mv "${installed_json}.tmp" "${installed_json}"
+        echo "Package '${package_name}' removed successfully from installed.json."
     else
         echo "Removal canceled."
     fi
@@ -338,19 +335,17 @@ function zrep_install_package() {
 
     # Construct the download URL
     local dlurl="https://kekepower.com/zrep/download.php?a=${author}&s=${script}&v=${version}"
-    # echo "${dlurl}"
-    # exit
 
     # Get the base directory where the package will be installed
     local baseDir="${config[main_zrep_install_dir]}/"
     local tmpDir="${baseDir}/tmp"
 
     # Create the directory if it doesn't exist
-    mkdir -p "$tmpDir"
+    mkdir -p "${tmpDir}"
 
     # Download the package zip file
     local zipFile="${tmpDir}/${author}_${package}_${version}.zip"
-    curl -s -o "$zipFile" "$dlurl"
+    curl -s -o "${zipFile}" "${dlurl}"
 
     # Check if the download was successful
     if [[ $? -ne 0 ]]; then
@@ -359,18 +354,18 @@ function zrep_install_package() {
     fi
 
     # Unzip the package to the installation directory
-    unzip -q "$zipFile" -d "$baseDir"
+    unzip -q "${zipFile}" -d "${baseDir}"
 
     # Check if the unzip operation was successful
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to unzip the package."
         return 1
     else
-        zrep_update_installed_json "$author" "$script" "$version"
+        zrep_update_installed_json "${author}" "${script}" "${version}"
     fi
 
     # Clean up: Remove the downloaded zip file
-    rm "$zipFile"
+    rm "${zipFile}"
 
 }
 
@@ -378,29 +373,29 @@ function zrep_install_package() {
 function zrep_parse_installed_json() {
 
   local installed_json="${config[main_zrep_install_dir]}/installed.json"
-  jq -c '.' "$installed_json"
+  jq -c '.' "${installed_json}"
 
 }
 
 function zrep_parse_package_name() {
     # echo "Looking for package ${1}"
-    package_name="$1"
+    package_name="${1}"
     installed_json="${config[main_zrep_install_dir]}/installed.json"
     author="${package_name%/*}"
     script="${package_name#*/}"
-    first_letter=$(echo "$author" | cut -c 1 | tr '[:upper:]' '[:lower:]')
-    addon_path="${config[main_zrep_install_dir]}/$first_letter/$author/$script"
+    first_letter=$(echo "${author}" | cut -c 1 | tr '[:upper:]' '[:lower:]')
+    addon_path="${config[main_zrep_install_dir]}/${first_letter}/${author}/${script}"
 
     # Check if the package is installed
-    if [[ ! -f "$installed_json" ]] || ! jq -e --arg author "$author" --arg script "$script" '.[$author] | any(.script == $script)' "$installed_json" &>/dev/null; then
-        echo "Error: Package '$package_name' is not installed."
+    if [[ ! -f "${installed_json}" ]] || ! jq -e --arg author "${author}" --arg script "${script}" '.[${author}] | any(.script == ${script})' "${installed_json}" &>/dev/null; then
+        echo "Error: Package '${package_name}' is not installed."
         return 1
     fi
 }
 
 function zrep_enable() {
-    local package_name="$1"
-    zrep_parse_package_name "$package_name"
+    local package_name="${1}"
+    zrep_parse_package_name "${package_name}"
 
     # Assuming zrep_parse_package_name sets 'addon_path' correctly
     # and 'package_name' is in 'author/script' format
@@ -416,25 +411,25 @@ function zrep_enable() {
     # Check if the addon is already enabled
     local addon_exists=0
     for addon in "${addons[@]}"; do
-        if [[ "$addon" == "$addon_path" ]]; then
+        if [[ "${addon}" == "${addon_path}" ]]; then
             addon_exists=1
             break
         fi
     done
 
     if ((addon_exists)); then
-        echo "Package '$package_name' is already enabled."
+        echo "Package '${package_name}' is already enabled."
         return 0
     fi
 
     # Add addon path to the array
-    addons+=("$addon_path")
+    addons+=("${addon_path}")
 
     # Reconstruct .zrep_addons file with the updated addons array
     {
         echo "addons=("
         for addon in "${addons[@]}"; do
-            echo "  '$addon'"
+            echo "  '${addon}'"
         done
         echo ")"
     } > "${config[main_zrep_install_dir]}/.addons"
@@ -443,13 +438,13 @@ function zrep_enable() {
     source "${HOME}/.zrep_addons"
     autoload -Uz "${script}"
 
-    zrep_msg info "\nPackage '$package_name' has been enabled and added to fpath."
+    zrep_msg info "\nPackage '${package_name}' has been enabled and added to fpath."
     zrep_msg info "You may have to run 'source ~/.zrep_addons' to get access to it."
 }
 
 function zrep_disable() {
-    local package_name="$1"
-    zrep_parse_package_name "$package_name"
+    local package_name="${1}"
+    zrep_parse_package_name "${package_name}"
 
     # Assuming zrep_parse_package_name sets 'addon_path' correctly
     # and 'package_name' is in 'author/script' format
@@ -470,15 +465,15 @@ function zrep_disable() {
 
     # Iterate through existing addons
     for addon in "${addons[@]}"; do
-        if [[ "$addon" == "$addon_path" ]]; then
+        if [[ "${addon}" == "${addon_path}" ]]; then
             found=1
         else
-            new_addons+=("$addon")
+            new_addons+=("${addon}")
         fi
     done
 
     if ((found == 0)); then
-        zrep_msg debug "\nPackage '$package_name' is not currently enabled."
+        zrep_msg debug "\nPackage '${package_name}' is not currently enabled."
         return 0
     fi
 
@@ -486,7 +481,7 @@ function zrep_disable() {
     {
         echo "addons=("
         for addon in "${new_addons[@]}"; do
-            echo "  '$addon'"
+            echo "  '${addon}'"
         done
         echo ")"
     } > ${config[main_zrep_install_dir]}/.addons
@@ -495,7 +490,7 @@ function zrep_disable() {
     source ${HOME}/.zrep_addons
     unfunction ${script} 2>/dev/null || true
 
-    zrep_msg info "\nPackage '$package_name (${script})' has been disabled and removed from fpath."
+    zrep_msg info "\nPackage '${package_name} (${script})' has been disabled and removed from fpath."
     zrep_msg info "You may have to run 'source ~/.zrep_addons' to remove it from your shell."
 }
 
@@ -503,37 +498,37 @@ function zrep_disable() {
 function zrep_help() {
 
   zrep_msg sub "\nUsage: zrep <command> [arguments]"
-  zrep_msg other "Available commands:"
-  zrep_msg other "  init: Initialize zrep"
-  zrep_msg other "  install (i) <author/package>: Install a package"
-  zrep_msg other "  remove (rm, delete) <author/package>: Remove a package"
-  zrep_msg other "  update (u) <author/package>: Update zrep package"
-  zrep_msg other "  enable <author/package>: Enable zrep package"
-  zrep_msg other "  disable <author/package>: Disable zrep package"
-  zrep_msg other "  version: Display zrep version"
-  zrep_msg other "  list: List installed packages"
-  zrep_msg other "  <author/package> help: Display help for pacakage"
+  zrep_msg info "Available commands:"
+  zrep_msg info "  init: Initialize zrep"
+  zrep_msg info "  install (i) <author/package>: Install a package"
+  zrep_msg info "  remove (rm, delete) <author/package>: Remove a package"
+  zrep_msg info "  update (u) <author/package>: Update zrep package"
+  zrep_msg info "  enable <author/package>: Enable zrep package"
+  zrep_msg info "  disable <author/package>: Disable zrep package"
+  zrep_msg info "  version: Display zrep version"
+  zrep_msg info "  list: List installed packages"
+  zrep_msg info "  <author/package> help: Display help for pacakage (if available)"
 
 }
 
 function zrep_read_usage() {
-    local package_name="$1"
+    local package_name="${1}"
     # Parse the package name to extract author and script
     local author="${package_name%/*}"
     local script="${package_name#*/}"
-    local first_letter=$(echo "$author" | cut -c 1 | tr '[:upper:]' '[:lower:]')
+    local first_letter=$(echo "${author}" | cut -c 1 | tr '[:upper:]' '[:lower:]')
 
     # Construct the path to the USAGE file
-    local usage_file="${config[main_zrep_install_dir]}/$first_letter/$author/$script/USAGE"
+    local usage_file="${config[main_zrep_install_dir]}/${first_letter}/${author}/${script}/USAGE"
 
     # Check if the USAGE file exists
-    if [[ -f "$usage_file" ]]; then
+    if [[ -f "${usage_file}" ]]; then
         # Display the content of the USAGE file
-        zrep_msg sub "\n$package_name:"
+        zrep_msg sub "\n${package_name}:"
         local usage_buffer=$(<${usage_file})
-        zrep_msg other "$usage_buffer"
+        zrep_msg info "${usage_buffer}"
     else
-        zrep_msg debug "No USAGE file found for package '$package_name'."
+        zrep_msg debug "No USAGE file found for package '${package_name}'."
     fi
 }
 
@@ -563,10 +558,10 @@ function main() {
         remove | delete | rm)
             # Parse the command argument to extract the package name
             zrep_remove_package_name="${2:-}"
-            if [[ -z "$zrep_remove_package_name" ]]; then
-                echo "Usage: zrep remove package_name"
+            if [[ -z "${zrep_remove_package_name}" ]]; then
+                echo "Usage: zrep remove author/package"
             else
-                zrep_remove_package "$zrep_remove_package_name"
+                zrep_remove_package "${zrep_remove_package_name}"
             fi
             ;;
         update | u)
