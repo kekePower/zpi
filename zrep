@@ -127,8 +127,8 @@ if [[ -n \${addons[@]} ]]; then
         if [[ -d \$addon ]] && [[ ! " \${fpath[*]} " =~ " \$addon " ]]; then
             fpath=(\$addon "\${fpath[@]}")  # Prepend the new addon to fpath
         fi
-    done
     autoload -Uz $(basename ${addon})
+    done
 else
     echo "zrep: No addons enabled."
 fi
