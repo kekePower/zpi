@@ -1,3 +1,5 @@
+<img src="zrep-logo.svg" width="150" align="left">
+
 # Zsh Repository Tool (zrep)
 
 zrep is a powerful and user-friendly package manager for the Zsh shell. It allows you to easily install, manage, and share Zsh packages, such as plugins, themes, and scripts, directly from a central repository.

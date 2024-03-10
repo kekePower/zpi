@@ -60,7 +60,7 @@ colors=(
 )
 
 function zrep_main_version_string() {
-  echo "${colors[bold_black]}${colors[white_bg]} ${ZREP} ${colors[end]}${colors[white]}${colors[black_bg]} ${VERSION} ${colors[end]}"
+  echo "${colors[bold_black]}${colors[white_bg]} ${ZREP} ${colors[end]}${colors[bold_white]}${colors[black_bg]} ${VERSION} ${colors[end]}"
 }
 
 function zrep_version() {
@@ -128,6 +128,7 @@ if [[ -n \${addons[@]} ]]; then
             fpath=(\$addon "\${fpath[@]}")  # Prepend the new addon to fpath
         fi
     done
+    autoload -Uz $(basename ${addon})
 else
     echo "zrep: No addons enabled."
 fi
@@ -203,14 +204,14 @@ function zrep_list_installed_packages() {
     # Iterate through each author and their packages
     jq -r 'to_entries | .[] | .key as $author | .value[] | "\($author)/\(.script) (\(.version))"' "$installed_json" | while IFS= read -r package_info; do
         local package_name=$(echo "$package_info" | cut -d ' ' -f1)  # Extract package name before the version
-        local is_active="${colors[white]}(${colors[end]}${colors[red]}Inactive${colors[end]}${colors[white]})${colors[end]}"  # Set default to Inactive
+        local is_active="${colors[white]}(${colors[end]}${colors[bold_red]}Inactive${colors[end]}${colors[white]})${colors[end]}"  # Set default to Inactive
 
         # Check if the package is active (only modify if active)
         if grep -q "$package_name" ${config[main_zrep_install_dir]}/.addons; then
             is_active="${colors[white]}(${colors[end]}${colors[bold_green]}Active${colors[end]}${colors[white]})${colors[end]}"
         fi
 
-        zrep_msg other " - $package_info $is_active"
+        zrep_msg info " - $package_info $is_active"
     done
 }
 
