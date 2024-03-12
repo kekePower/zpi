@@ -1,0 +1,10 @@
+# Classic zrep theme
+declare -A theme_colors=(
+    [std]="green"
+    [info]="yellow"
+    [debug]="red"
+    [other]="bold_yellow"
+    [sub]="magenta"
+    [main]="white green_bg" # Combining colors for 'main'
+    [help]="bold_green"
+)
