@@ -157,7 +157,7 @@ function zrep_installed_json() {
         return 1
     else
         installed_json="${config[main_zrep_install_dir]}/installed.json"
-        export ${installed_json}
+        export installed_json=${installed_json}
     fi
 
 }
