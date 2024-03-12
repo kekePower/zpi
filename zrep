@@ -95,18 +95,25 @@ function zrep_init() {
         install_dir=${install_dir:-"${HOME}/.zrep"}
 
         # Write to .zreprc
-        echo "[main]" > ${ZREP_CONFIG}
-        echo "zrep_install_dir='${install_dir}'" >> "${ZREP_CONFIG}"
+        cat > "${ZREP_CONFIG}" <<EOF
+        [main]
+        zrep_install_dir = ${install_dir}
+
+        [global]
+        repo_url = https://kekepower.com/zrep
+EOF
     else
         echo "Loading configuration from ${ZREP_CONFIG}"
         zini ${ZREP_CONFIG}
         install_dir=${config[main_zrep_install_dir]}
     fi
 
-    # Ensure zrep_install_dir exists
     mkdir -p "${install_dir}/functions/zini"
     curl -s https://raw.githubusercontent.com/kekePower/zini/main/zini -o "${install_dir}/functions/zini/zini"
-    echo "fpath=(${install_dir}/functions/zini \$fpath)" >> ${zshrc_file}
+    if ! grep -q "zini" "${zshrc_file}"; then
+        echo "Adding 'zini' path to fpath in ${zshrc_file}"
+        echo "fpath=(${install_dir}/functions/zini \$fpath)" >> ${zshrc_file}
+    fi
 
     # Check if .zshrc already sources .zrep_addons, if not, add it
     if ! grep -q "source ${addons_file}" "${zshrc_file}"; then
@@ -139,6 +146,7 @@ EOF
     fi
 
     echo "zrep initialization complete."
+    echo "Remember to 'source ${zshrc_file}' to load the 'zrep' settings."
 }
 
 # Function to parse remote JSON data and extract author, script, and version
@@ -346,7 +354,7 @@ function zrep_check_if_installed() {
     installed_version=$(jq -r --arg author "$author_name" --arg script "$script_name" \
         '.[$author][] | select(.script == $script) | .version' "$installedJson")
 
-    if [[ -n "$installed_version" && "$installed_version" != "null" ]]; then
+    if [[ -n "${installed_version}" && "${installed_version}" != "null" ]]; then
         # Package is installed, and version is stored in installed_version
         # echo "Package $package is installed with version $installed_version."
         return 0  # Package is installed
@@ -360,7 +368,7 @@ typeset -A updatesAvailable
 function zrep_check_for_updates() {
     local remoteFile="${config[global_repo_url]}/packages.json"
     local localFile="${config[main_zrep_install_dir]}/installed.json"
-    local remotePackages=$(curl -s "$remoteFile")
+    local remotePackages=$(curl -s "${remoteFile}")
 
     # Reset global variables
     updatesAvailable=()
@@ -372,52 +380,56 @@ function zrep_check_for_updates() {
     for entry in ${(f)authorsScripts}; do
         local author="${entry%%/*}"
         local rest="${entry#*/}"
-        local script_name="${rest%%:*}"
+        local script="${rest%%:*}"
         local installed_version="${rest##*:}"
 
-        local remote_version=$(jq -r --arg author "$author" --arg script "$script_name" \
+        local remote_version=$(jq -r --arg author "$author" --arg script "$script" \
                                '.authors[] | select(.name==$author) | .scripts[] | select(.name==$script) | .version' <<<"$remotePackages")
 
-        if [[ "$remote_version" > "$installed_version" ]]; then
-            updatesAvailable[$author/$script_name]="$remote_version"
-            zrep_msg info "\n$author/$script_name can be updated from $installed_version to $remote_version"
+        if [[ "${remote_version}" > "${installed_version}" ]]; then
+            updatesAvailable[${author}/${script}]="${remote_version}"
+            zrep_msg info "\n${author}/${script} can be updated from ${installed_version} to ${remote_version}"
             updates=true # Mark that updates are available
         fi
     done
 
 }
 
-
 function zrep_update_package() {
     local specificPackage=${1}
     zrep_check_for_updates
 
     # Check if in update mode or specific package update
-    if [[ -n "$specificPackage" ]]; then
+    if [[ -n "${specificPackage}" ]]; then
         # Logic for updating a specific package
         # Assuming specificPackage format is "author/script"
-        local version=${updatesAvailable[$specificPackage]}
+        local version=${updatesAvailable[${specificPackage}]}
         if [[ -n "$version" ]]; then
             local author="${specificPackage%%/*}"
             local script="${specificPackage#*/}"
             local dlurl="${config[global_repo_url]}/download.php?a=${author}&s=${script}&v=${version}"
             # echo "Updating $specificPackage to version $version..."
-            zrep_install_package u $author/$script
+            local install_pkg="${author}/${script}"
+            zrep_install_package u ${install_pkg}
         else
-            echo "No update available for $specificPackage."
+            echo "No update available for ${specificPackage}."
         fi
     else
-        # General update mode: update all packages listed in updatesAvailable
-        for package in ${(k)updatesAvailable}; do
-            local author=${package%%/*}
-            local script=${package#*/}
-            local version=${updatesAvailable[$package]}
-            # local dlurl="${config[global_repo_url]}/download.php?a=${author}&s=${script}&v=${version}"
+        if [[ ${updates} == "true" ]]; then
+            # General update mode: update all packages listed in updatesAvailable
+            for package in ${(k)updatesAvailable}; do
+                local author=${package%%/*}
+                local script=${package#*/}
+                local version=${updatesAvailable[${package}]}
+                # local dlurl="${config[global_repo_url]}/download.php?a=${author}&s=${script}&v=${version}"
 
-            # echo "Preparing to update $package to version $version..."
-            local install_pkg="$author/$script"
-            zrep_install_package u $install_pkg
-        done
+                # echo "Preparing to update $package to version $version..."
+                local install_pkg="${author}/${script}"
+                zrep_install_package u ${install_pkg}
+            done
+        else
+            zrep_msg info "\nNo updates found."
+        fi
     fi
 }
 
@@ -432,7 +444,7 @@ function zrep_install_package() {
         updates=false
         local package="${1}"
         # Call zrep_check_if_installed to check if the package is already installed
-        if zrep_check_if_installed "$package"; then
+        if zrep_check_if_installed "${package}"; then
             zrep_msg info "Package ${package} is already installed."
             zrep_msg info "Use 'zrep list' to see installed packages."
             return 0
@@ -598,7 +610,9 @@ function zrep_help() {
 
   zrep_msg sub "\nUsage: zrep <command> [arguments]"
   zrep_msg info "Available commands:"
-  zrep_msg info "  init: Initialize zrep"
+    if [[ ! -f ${ZREP_CONFIG} ]]; then
+        zrep_msg info "  init: Initialize zrep"
+    fi
   zrep_msg info "  check: Check for updates"
   zrep_msg info "  install (i) <author/package>: Install a package"
   zrep_msg info "  remove (rm, delete) <author/package>: Remove a package"
