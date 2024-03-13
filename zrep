@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.1" # Sat-2024-02-24
+VERSION="0.0.2" # Sat-2024-03-13
 ZREP="Zsh Repository Tool"
 # Define the path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -220,10 +220,8 @@ function zrep_parse_remote() {
         export version
         export dlurl
 
-        #echo "Download URL: ${dlurl}"
-        #echo "Author: ${author}, Script: ${script}, Version: ${version}"
     else
-        echo "Package ${package} not found."
+        zrep_msg debug "\nPackage ${package} not found."
     fi
 }
 
@@ -284,9 +282,9 @@ function zrep_list_package() {
 
     # Assuming you want to print out the concatenated package names
     if [[ -n "${package_names}" ]]; then
-        echo "Installed packages: ${package_names}"
+        zrep_msg info "\nInstalled packages: ${package_names}"
     else
-        echo "No packages found."
+        zrep_msg debug "\nNo packages found."
     fi
 }
 
@@ -524,7 +522,7 @@ function zrep_install_package() {
     unzip -q -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
 
     if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to unzip the package."
+        zrep_msg debug "\nError: Failed to unzip the package."
         return 1
     else
         zrep_update_installed_json "${author}" "${script}" "${version}"
@@ -552,7 +550,7 @@ function zrep_parse_package_name() {
 
     # Check if the package is installed
     if ! jq -e --arg author "$author" --arg script "$script" '.[$author] | any(.script == $script)' "${installed_json}" &>/dev/null; then
-        echo "Error: Package '${package_name}' is not installed."
+        zrep_msg debug "\nError: Package '${package_name}' is not installed."
         return 1
     fi
 }
@@ -654,7 +652,7 @@ function zrep_help() {
     fi
   zrep_msg info "  check: Check for updates"
   zrep_msg info "  install (i) <author/package>: Install a package"
-  zrep_msg info "  remove (rm, delete) <author/package>: Remove a package"
+  zrep_msg info "  remove (rm, delete, del) <author/package>: Remove a package"
   zrep_msg info "  update (u) <author/package>: Update zrep package"
   zrep_msg info "  enable <author/package>: Enable zrep package"
   zrep_msg info "  disable <author/package>: Disable zrep package"
@@ -710,11 +708,11 @@ function main() {
         install | i)
             zrep_install_package ${2}
             ;;
-        remove | delete | rm)
+        remove | delete | rm | del)
             # Parse the command argument to extract the package name
             zrep_remove_package_name="${2:-}"
             if [[ -z "${zrep_remove_package_name}" ]]; then
-                echo "Usage: zrep ${1} author/package"
+                zrep_msg info "\nUsage: zrep ${1} author/package"
             else
                 zrep_remove_package "${zrep_remove_package_name}"
             fi
