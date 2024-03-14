@@ -293,12 +293,13 @@ function zrep_list_installed_packages() {
         local package_name=$(echo "${package_info}" | cut -d ' ' -f1)  # Extract package name before the version
         local is_active="${base_colors[white]}(${base_colors[end]}${base_colors[bold_red]}Inactive${base_colors[end]}${base_colors[white]})${base_colors[end]}"  # Set default to Inactive
 
+        zmodload zsh/regex
         # Check if the package is active (only modify if active)
-        if grep -q "${package_name}" ${config[main_zrep_install_dir]}/.addons; then
+        if [[ $(<${config[main_zrep_install_dir]}/.addons) =~ "\b${package_name}\b" ]]; then
             is_active="${base_colors[white]}(${base_colors[end]}${base_colors[bold_green]}Active${base_colors[end]}${base_colors[white]})${base_colors[end]}"
         fi
 
-        zrep_msg info " - ${package_info} ${is_active}"
+        zrep_msg info " |> ${package_info} ${is_active}"
     done
 }
 
