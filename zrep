@@ -817,8 +817,10 @@ function zrep_read_usage() {
 function main() {
 
     zrep_main_version_string
-    zrep_load_config ${1}
-    zrep_load_theme ${config[global_theme]}
+    if [[ ${1} != "init" ]]; then
+        zrep_load_config ${1}
+        zrep_load_theme ${config[global_theme]}
+    fi
 
     # Check if the second argument is "help" and the first argument is not empty
     if [[ "${2}" == "help" && -n "${1}" ]]; then
