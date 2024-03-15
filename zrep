@@ -130,7 +130,7 @@ function zrep_find_string() {
 
 function zrep_check_for_deps() {
     # Array of required external programs
-    local required_programs=('jq')
+    local required_programs=('jq' 'curl')
 
     # Iterate over the array
     for program in "${required_programs[@]}"; do
