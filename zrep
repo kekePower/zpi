@@ -153,10 +153,10 @@ function zrep_init() {
         read "install_dir?Enter zrep installation directory [${HOME}/.zrep]: "
         install_dir=${install_dir:-"${HOME}/.zrep"}
         read "downloader?Choose command to download packages [curl, wget, wget2]: "
-        if [[ ${downloader} != curl || ${downloader} != wget || ${downloader} != wget2 ]]; then
+        if [[ ${downloader} != curl && ${downloader} != wget && ${downloader} != wget2 ]]; then
             echo "Invalid choice: '$downloader'. Try again."
             read "downloader?Choose command to download packages [curl, wget, wget2] "
-            if [[ ${downloader} != curl || ${downloader} != wget || ${downloader} != wget2 ]]; then
+            if [[ ${downloader} != curl && ${downloader} != wget && ${downloader} != wget2 ]]; then
                 echo "Invalid choice: '$downloader'. Exiting."
                 exit
             fi
