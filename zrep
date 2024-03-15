@@ -24,6 +24,11 @@ function zrep_fpath() {
     done
 }
 
+if [[ ${1} != "init" ]]; then
+        zrep_fpath ${HOME}/.zrep/functions
+        autoload -Uz zini
+fi
+
 # Define a list of colors available to use in themes
 typeset -A base_colors=(
     [green]="\033[0;32m"
@@ -218,6 +223,8 @@ EOF
         echo "File .zrep_addons already exists. Review manually if update is needed."
     fi
 
+    touch ${install_dir}/.addons
+    touch ${install_dir}/installed.json
     echo "zrep initialization complete."
     echo "Remember to 'source ${zshrc_file}' to load the 'zrep' settings."
 }
