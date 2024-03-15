@@ -301,7 +301,7 @@ function zrep_list_installed_packages() {
 
     # Check if installed.json exists and is not empty
     if [[ ! -s "${installed_json}" ]]; then
-        zrep_msg info "No packages installed."
+        zrep_msg info "\nNo packages installed."
         return
     fi
 
@@ -310,7 +310,7 @@ function zrep_list_installed_packages() {
 
     # Check if the JSON file is effectively empty ({} or [])
     if jq -e 'if type == "object" then . == {} elif type == "array" then . == [] else false end' "${installed_json}" >/dev/null; then
-        zrep_msg info "No packages installed."
+        zrep_msg info "\nNo packages installed."
         return
     fi
 
