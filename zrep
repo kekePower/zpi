@@ -157,6 +157,7 @@ function zrep_init() {
         # Prompt user for install directory
         read "install_dir?Enter zrep installation directory [${HOME}/.zrep]: "
         install_dir=${install_dir:-"${HOME}/.zrep"}
+        mkdir -p ${install_dir}
         read "downloader?Choose command to download packages [curl, wget, wget2]: "
         if [[ ${downloader} != curl && ${downloader} != wget && ${downloader} != wget2 ]]; then
             echo "Invalid choice: '$downloader'. Try again."
@@ -191,6 +192,7 @@ EOF
         curl -s https://raw.githubusercontent.com/kekePower/zini/main/zini -o "${install_dir}/functions/zini/zini"
         echo "Adding 'zini' path to fpath in ${zshrc_file}"
         echo "fpath=(${install_dir}/functions/zini \$fpath)" >> ${zshrc_file}
+        autoload -Uz zini
     fi
 
     # Check if .zshrc already sources .zrep_addons, if not, add it
@@ -202,6 +204,7 @@ EOF
     # Create or update the .zrep_addons file
     if [[ ! -f ${zrep_addons} ]]; then
         echo "Creating file ${zrep_addons}..."
+        touch ${install_dir}/.addons
         cat > "${zrep_addons}" <<EOF
 # Source the .addons file from the zrep installation directory
 source "${install_dir}/.addons"
@@ -223,8 +226,11 @@ EOF
         echo "File .zrep_addons already exists. Review manually if update is needed."
     fi
 
-    touch ${install_dir}/.addons
-    touch ${install_dir}/installed.json
+    if [[ ! -d ${install_dir}/themes ]]; then
+        echo "Installing the Classic theme"
+        mkdir -p ${install_dir}/themes
+        curl -s https://git.kekepower.com/kekePower/zrep/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
+    fi
     echo "zrep initialization complete."
     echo "Remember to 'source ${zshrc_file}' to load the 'zrep' settings."
 }
