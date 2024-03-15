@@ -366,13 +366,15 @@ function zrep_load_config() {
         zrep_fpath ${config[main_zrep_install_dir]}
     else
         if [[ "${1}" == "init" ]]; then
-            echo "${ZREP_CONFIG} not found. Proceeding with 'zrep init'..."
+            echo "\nWelcome to zrep. Looks like this is the first time you are"
+            echo "running me."
+            read "response?Are you ready to set up zrep? (y/n): "
+            if [[ "${response}" =~ ^[Yy]$ ]]; then
             zrep_init
         else
             # echo "${ZREP_CONFIG} not found."
             # Ask the user if they want to run 'zrep init'
-            echo "\nWelcome to zrep. Looks like this is the first time you are"
-            echo "running me."
+            echo "\nWelcome to zrep. I was unable to find the config file."
             read "response?Would you like to run 'zrep init' to set up? (y/n): "
             if [[ "${response}" =~ ^[Yy]$ ]]; then
                 zrep_init
