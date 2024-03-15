@@ -212,7 +212,7 @@ if [[ -n \${addons[@]} ]]; then
         if [[ -d \${addon} ]] && [[ ! " \${fpath[*]} " =~ " \${addon} " ]]; then
             fpath=(\${addon} "\${fpath[@]}")  # Prepend the new addon to fpath
         fi
-    autoload -Uz $(basename ${addon})
+    autoload -Uz \$(basename \${addon})
     done
 else
     echo "zrep: No addons enabled."
@@ -592,7 +592,7 @@ function zrep_install_package() {
     if [[ ${1} == "u" ]]; then
         updates=true
         local package=${2}
-        # echo "zrep_install_package: package=$package"
+        echo "zrep_install_package: package=$package"
     else
         updates=false
         local package="${1}"
@@ -614,7 +614,7 @@ function zrep_install_package() {
     local zipFile="${tmpDir}/${author}-${script}-${version}.zip"
     zrep_download_package "${zipFile}" "${dlurl}"
 
-    unzip -q -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
+    unzip -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
 
     if [[ $? -ne 0 ]]; then
         zrep_msg debug "\nError: Failed to unzip the package."
