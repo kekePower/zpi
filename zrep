@@ -239,6 +239,7 @@ function zrep_installed_json() {
 
     # Check if installed.json exists
     if [[ ! -f "${config[main_zrep_install_dir]}/installed.json" ]]; then
+        touch ${config[main_zrep_install_dir]}/installed.json
         zrep_msg debug "\nError: installed.json not found."
         return 1
     else
