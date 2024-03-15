@@ -24,9 +24,6 @@ function zrep_fpath() {
     done
 }
 
-zrep_fpath ${HOME}/.zrep/functions
-autoload -Uz zini
-
 # Define a list of colors available to use in themes
 typeset -A base_colors=(
     [green]="\033[0;32m"
@@ -156,10 +153,10 @@ function zrep_init() {
         read "install_dir?Enter zrep installation directory [${HOME}/.zrep]: "
         install_dir=${install_dir:-"${HOME}/.zrep"}
         read "downloader?Choose command to download packages [curl, wget, wget2]: "
-        if [[ ${downloader} != "curl" || ${downloader} != "wget" || ${downloader} != "wget2" ]]; then
+        if [[ ${downloader} != curl || ${downloader} != wget || ${downloader} != wget2 ]]; then
             echo "Invalid choice: '$downloader'. Try again."
             read "downloader?Choose command to download packages [curl, wget, wget2] "
-            if [[ ${downloader} != "curl" || ${downloader} != "wget" || ${downloader} != "wget2" ]]; then
+            if [[ ${downloader} != curl || ${downloader} != wget || ${downloader} != wget2 ]]; then
                 echo "Invalid choice: '$downloader'. Exiting."
                 exit
             fi
@@ -177,6 +174,8 @@ downloader = ${downloader}
 EOF
     echo "The file '${ZREP_CONFIG}' has been created."
     else
+        zrep_fpath ${HOME}/.zrep/functions
+        autoload -Uz zini
         echo "Loading configuration from ${ZREP_CONFIG}"
         zini ${ZREP_CONFIG}
         install_dir=${config[main_zrep_install_dir]}
