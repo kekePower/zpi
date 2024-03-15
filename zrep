@@ -533,7 +533,7 @@ function zrep_download_package() {
   case "${config[global_downloader]}" in
     curl)
       downloader="curl"
-      cmd="curl -s -w \"%{http_code}\" -o \"$ZipFile\" \"$DownloadURL\" -o /dev/null"
+      cmd="curl -s -w \"%{http_code}\" -o \"$ZipFile\" \"$DownloadURL\""
       ;;
     wget)
       downloader="wget"
