@@ -184,7 +184,7 @@ EOF
         autoload -Uz zini
         echo "Loading configuration from ${ZREP_CONFIG}"
         zini ${ZREP_CONFIG}
-        install_dir=${config[main_zrep_install_dir]}
+        # install_dir=${config[main_zrep_install_dir]}
     fi
 
     if [[ $(zrep_find_string zini) -eq 0 ]]; then
@@ -227,7 +227,7 @@ EOF
     fi
 
     if [[ ! -d ${install_dir}/themes ]]; then
-        echo "Installing the Classic theme"
+        echo "Installing the Classic theme to ${install_dir}/themes"
         mkdir -p ${install_dir}/themes
         curl -s https://git.kekepower.com/kekePower/zrep/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
     fi
@@ -369,8 +369,10 @@ function zrep_load_config() {
             echo "${ZREP_CONFIG} not found. Proceeding with 'zrep init'..."
             zrep_init
         else
-            echo "${ZREP_CONFIG} not found."
+            # echo "${ZREP_CONFIG} not found."
             # Ask the user if they want to run 'zrep init'
+            echo "\nWelcome to zrep. Looks like this is the first time you are"
+            echo "running me."
             read "response?Would you like to run 'zrep init' to set up? (y/n): "
             if [[ "${response}" =~ ^[Yy]$ ]]; then
                 zrep_init
@@ -810,7 +812,7 @@ function zrep_read_usage() {
 function main() {
 
     zrep_main_version_string
-    zrep_load_config
+    zrep_load_config ${1}
     zrep_load_theme ${config[global_theme]}
 
     # Check if the second argument is "help" and the first argument is not empty
