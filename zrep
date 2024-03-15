@@ -130,7 +130,7 @@ function zrep_find_string() {
 
 function zrep_check_for_deps() {
     # Array of required external programs
-    local required_programs=('jq' 'curl')
+    local required_programs=('jq' "${config[global_downloader]}")
 
     # Iterate over the array
     for program in "${required_programs[@]}"; do
@@ -149,14 +149,21 @@ function zrep_init() {
     local zrep_addons="${HOME}/.zrep_addons"
     local install_dir
 
-    zrep_check_for_deps
-
     # Check if .zreprc exists
     if [[ ! -f ${ZREP_CONFIG} ]]; then
         echo "${ZREP_CONFIG} not found. Creating it..."
         # Prompt user for install directory
         read "install_dir?Enter zrep installation directory [${HOME}/.zrep]: "
         install_dir=${install_dir:-"${HOME}/.zrep"}
+        read "downloader?Choose command to download packages [curl, wget, wget2]: "
+        if [[ ${downloader} != "curl" || ${downloader} != "wget" || ${downloader} != "wget2" ]]; then
+            echo "Invalid choice: '$downloader'. Try again."
+            read "downloader?Choose command to download packages [curl, wget, wget2] "
+            if [[ ${downloader} != "curl" || ${downloader} != "wget" || ${downloader} != "wget2" ]]; then
+                echo "Invalid choice: '$downloader'. Exiting."
+                exit
+            fi
+        fi
 
         # Write to .zreprc
         cat > "${ZREP_CONFIG}" <<EOF
@@ -166,7 +173,9 @@ zrep_install_dir = ${install_dir}
 [global]
 repo_url = https://kekepower.com/zrep
 theme = classic
+downloader = ${downloader}
 EOF
+    echo "The file '${ZREP_CONFIG}' has been created."
     else
         echo "Loading configuration from ${ZREP_CONFIG}"
         zini ${ZREP_CONFIG}
@@ -495,32 +504,69 @@ function zrep_update_package() {
     fi
 }
 
+# Enhanced zrep_downloader function with error handling and retry logic.
+# It attempts to download a file from a given URL to a specified zip file using curl, wget, or wget2 based on the global configuration.
+# This function supports retries and delays between attempts for robust error handling.
+#
+# Usage: zrep_download_package ZipFile DownloadURL
+#
+# Parameters:
+#   DownloadURL: The URL from which to download the file.
+#   ZipFile: The name of the file to save the downloaded content to.
+
 function zrep_download_package() {
-    local zipFile="${1}"
-    local dlurl="${2}"
-    local retries=5
-    local delay=5
-    local attempt=1
+  local ZipFile="${1}"
+  local DownloadURL="${2}"
+  local retries=5
+  local delay=5
+  local attempt=1
+  local downloader=""
+  local http_status
+  local cmd
 
-    while (( attempt <= retries )); do
-        zrep_msg sub "Attempt $attempt of $retries: Downloading..."
-        # Use curl to download the file, capturing HTTP status code
-        http_status=$(curl -s -w "%{http_code}" -o "${zipFile}" "${dlurl}" -o /dev/null)
+  case "${config[global_downloader]}" in
+    curl)
+      downloader="curl"
+      cmd="curl -s -w \"%{http_code}\" -o \"$ZipFile\" \"$DownloadURL\" -o /dev/null"
+      ;;
+    wget)
+      downloader="wget"
+      cmd="wget -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
+      ;;
+    wget2)
+      downloader="wget2"
+      cmd="wget2 -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
+      ;;
+    *)
+      zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
+      return 1
+      ;;
+  esac
 
-        # Check if curl command was successful and HTTP status is 200 (OK)
-        if [[ $? -eq 0 && ${http_status} -eq 200 ]]; then
-            zrep_msg sub "Download successful."
-            return 0
-        else
-            zrep_msg debug "Error: Failed to download the package. HTTP status: ${http_status}."
-            ((attempt++))
-            zrep_msg info "Waiting ${delay} seconds before retrying..."
-            sleep ${delay}
-        fi
-    done
+  while (( attempt <= retries )); do
+    zrep_msg sub "Attempt $attempt of $retries: Downloading using $downloader..."
 
-    zrep_msg debug "Error: The download failed after ${retries} attempts."
-    return 1
+    if [[ $downloader == "curl" ]]; then
+      eval $cmd
+      http_status="${PIPESTATUS[0]}"
+    else # wget or wget2
+      http_status=$(eval $cmd)
+    fi
+
+    # Check if download command was successful (0 exit status) and, for curl, HTTP status is 200 (OK)
+    if [[ $down_status -eq 0 && ($downloader != "curl" || $http_status -eq 200) ]]; then
+      zrep_msg sub "Download successful."
+      return 0
+    else
+      zrep_msg debug "Error: Failed to download the package. HTTP status (curl only): ${http_status}."
+      ((attempt++))
+      zrep_msg info "Waiting ${delay} seconds before retrying..."
+      sleep $delay
+    fi
+  done
+
+  zrep_msg debug "Error: The download failed after $retries attempts."
+  return 1
 }
 
 # Function to install a package by unzipping it to ${config[main_zrep_install_dir]}
@@ -681,16 +727,40 @@ function zrep_help() {
     if [[ ! -f ${ZREP_CONFIG} ]]; then
         zrep_msg info "  init: Initialize zrep"
     fi
-  zrep_msg info "  check: Check for updates"
-  zrep_msg info "  install (i) <author/package>: Install a package"
-  zrep_msg info "  remove (rm, delete, del) <author/package>: Remove a package"
-  zrep_msg info "  update (u) <author/package>: Update zrep package"
-  zrep_msg info "  enable <author/package>: Enable zrep package"
-  zrep_msg info "  disable <author/package>: Disable zrep package"
-  zrep_msg info "  version: Display zrep version"
-  zrep_msg info "  list: List installed packages"
-  zrep_msg info "  <author/package> help: Display help for pacakage (if available)"
+  zrep_msg info "  install (i) <author/package>:\t\t\tInstall a package"
+  zrep_msg info "  remove (rm, delete, del) <author/package>:\tRemove a package"
+  zrep_msg info "  update (u) <author/package>:\t\t\tUpdate zrep package"
+  zrep_msg info "  enable <author/package>:\t\t\tEnable zrep package"
+  zrep_msg info "  disable <author/package>:\t\t\tDisable zrep package"
+  zrep_msg info "  version:\t\t\t\t\tDisplay zrep version"
+  zrep_msg info "  list:\t\t\t\t\t\tList installed packages"
+  zrep_msg info "  <author/package> help:\t\t\tDisplay help for pacakage (if available)"
 
+}
+
+function zrep_package_info() {
+  local package_name="${1}"
+  zrep_installed_json # Ensure installed.json is loaded and available
+
+  # Parse the package name to extract author and script
+  local author="${package_name%/*}"
+  local script="${package_name#*/}"
+  local first_letter="${author:0:1:l}" # Get the first letter of the author's name to construct the URL
+
+  # Check if the package is installed and get its version
+  if zrep_check_if_installed "${package_name}"; then
+    local installed_version="${installed_version}" # This variable is set by zrep_check_if_installed
+    local package_dir="${config[main_zrep_install_dir]}/${first_letter}/${author}/${script}"
+    local zrep_url="${config[global_repo_url]}/${first_letter}/${author}/${script}"
+
+    # Display package information
+    zrep_msg info "\nAuthor/Package:\t\t${author}/${script}"
+    zrep_msg info "Version installed:\t${installed_version}"
+    zrep_msg info "Location on disk:\t${package_dir}"
+    zrep_msg info "zrep URL:\t\t${zrep_url}"
+  else
+    zrep_msg debug "\nPackage '${package_name}' is not installed."
+  fi
 }
 
 function zrep_read_usage() {
@@ -730,10 +800,8 @@ function main() {
     case "${1}" in
         init)
     	    zrep_init
+            zrep_check_for_deps
     	    exit
-            ;;
-        check)
-            zrep_check_for_updates
             ;;
         install | i)
             zrep_install_package ${2}
@@ -764,6 +832,9 @@ function main() {
             ;;
         disable)
             zrep_disable ${2}
+            ;;
+        info)
+            zrep_package_info ${2}
             ;;
         *)
             zrep_help
