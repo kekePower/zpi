@@ -274,7 +274,7 @@ function zrep_parse_remote() {
         export dlurl
 
     else
-        zrep_msg debug "\nPackage ${package} not found."
+        zrep_msg debug "\nPackage ${package} not found.\n"
         exit 1
     fi
 }
