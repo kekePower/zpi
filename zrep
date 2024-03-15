@@ -370,7 +370,10 @@ function zrep_load_config() {
             echo "running me."
             read "response?Are you ready to set up zrep? (y/n): "
             if [[ "${response}" =~ ^[Yy]$ ]]; then
-            zrep_init
+                zrep_init
+            else
+                echo "Setup aborted. Try again later."
+            fi
         else
             # echo "${ZREP_CONFIG} not found."
             # Ask the user if they want to run 'zrep init'
