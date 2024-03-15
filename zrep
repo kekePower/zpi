@@ -614,7 +614,7 @@ function zrep_install_package() {
     local zipFile="${tmpDir}/${author}-${script}-${version}.zip"
     zrep_download_package "${zipFile}" "${dlurl}"
 
-    unzip -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
+    unzip -aa "${zipFile}" -o -d "${config[main_zrep_install_dir]}"
 
     if [[ $? -ne 0 ]]; then
         zrep_msg debug "\nError: Failed to unzip the package."
