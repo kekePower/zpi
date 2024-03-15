@@ -278,12 +278,12 @@ function zrep_update_installed_json() {
     local version="${3}"
     zrep_installed_json
 
-    # Ensure the JSON file exists, creating an empty object if not
-    if [[ ! -f "${installed_json}" ]]; then
+    # Ensure the JSON file exists and is not empty, creating an empty object if necessary
+    if [[ ! -f "${installed_json}" ]] || [[ ! -s "${installed_json}" ]]; then
         echo "{}" > "${installed_json}"
     fi
 
-    # Correctly handle updating or adding script entries within the nested array
+    # Update or add the script entry
     jq --arg author "$author" --arg script "$script" --arg version "$version" \
 'if has($author) then
     .[$author] |= map(if .script == $script then .version = $version else . end) |
@@ -291,7 +291,6 @@ function zrep_update_installed_json() {
 else
     .[$author] = [{"script": $script, "version": $version}]
 end' "$installed_json" > "$installed_json.tmp" && mv "$installed_json.tmp" "$installed_json"
-
 
     zrep_msg info " - Package '$script' by '$author' version $version installed/updated successfully."
 }
@@ -533,7 +532,7 @@ function zrep_download_package() {
   case "${config[global_downloader]}" in
     curl)
       downloader="curl"
-      cmd="curl -s -w \"%{http_code}\" -o \"$ZipFile\" \"$DownloadURL\""
+      cmd="curl -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
       ;;
     wget)
       downloader="wget"
