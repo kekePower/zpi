@@ -299,8 +299,20 @@ end' "$installed_json" > "$installed_json.tmp" && mv "$installed_json.tmp" "$ins
 function zrep_list_installed_packages() {
     zrep_installed_json
 
+    # Check if installed.json exists and is not empty
+    if [[ ! -s "${installed_json}" ]]; then
+        zrep_msg info "No packages installed."
+        return
+    fi
+
     # Parse installed.json and list packages
     zrep_msg sub "\nInstalled packages:"
+
+    # Check if the JSON file is effectively empty ({} or [])
+    if jq -e 'if type == "object" then . == {} elif type == "array" then . == [] else false end' "${installed_json}" >/dev/null; then
+        zrep_msg info "No packages installed."
+        return
+    fi
 
     # Iterate through each author and their packages
     jq -r 'to_entries | .[] | .key as $author | .value[] | "\($author)/\(.script) (\(.version))"' "${installed_json}" | while IFS= read -r package_info; do
