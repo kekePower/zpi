@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.2" # Sat-2024-03-13
+VERSION="0.0.3" # Sun-2024-03-17
 ZREP="Zsh Repository Tool"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -189,7 +189,7 @@ EOF
 
     if [[ $(zrep_find_string zini) -eq 0 ]]; then
         mkdir -p "${install_dir}/functions/zini"
-        curl -s https://raw.githubusercontent.com/kekePower/zini/main/zini -o "${install_dir}/functions/zini/zini"
+        zrep_global_downloader https://raw.githubusercontent.com/kekePower/zini/main/zini -o "${install_dir}/functions/zini/zini"
         echo "Adding 'zini' path to fpath in ${zshrc_file}"
         echo "fpath=(${install_dir}/functions/zini \$fpath)" >> ${zshrc_file}
         autoload -Uz zini
@@ -229,7 +229,7 @@ EOF
     if [[ ! -d ${install_dir}/themes ]]; then
         echo "Installing the Classic theme to ${install_dir}/themes"
         mkdir -p ${install_dir}/themes
-        curl -s https://git.kekepower.com/kekePower/zrep/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
+        zrep_global_downloader https://git.kekepower.com/kekePower/zrep/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
     fi
     echo "zrep initialization complete."
     echo "Remember to 'source ${zshrc_file}' to load the 'zrep' settings."
@@ -259,7 +259,7 @@ function zrep_parse_remote() {
     local json_data
 
     # Fetch JSON data from the URL
-    json_data=$(curl -s "${url}")
+    json_data=$(zrep_global_downloader "${url}")
 
     # Directly extract the details based on author_name and script_name
     dlurl=$(echo "${json_data}" | jq -r --arg author_name "$author_name" --arg script_name "$script_name" '.authors[] | select(.name==$author_name) | .scripts[] | select(.name==$script_name) | .dlurl')
@@ -464,12 +464,32 @@ function zrep_check_if_installed() {
     fi
 }
 
+function zrep_global_downloader() {
+    case ${config[global_downloader]} in
+        curl)
+            dloader="curl -s -A \"zrep ${VERSION} (curl)\""
+            ;;
+        wget)
+            dloader="wget -q -U \"zrep ${VERSION} (wget)\""
+            ;;
+        wget2)
+            dloader="wget2 -q -U \"zrep ${VERSION} (wget2)\""
+            ;;
+        *)
+            echo "Invalid Downloader."
+            exit
+            ;;
+    esac
+    eval ${dloader} ${1}
+}
+
 typeset -A updatesAvailable
 function zrep_check_for_updates() {
+
     local remoteFile="${config[global_repo_url]}/packages.json"
     # local localFile="${config[main_zrep_install_dir]}/installed.json"
     zrep_installed_json
-    local remotePackages=$(curl -s "${remoteFile}")
+    local remotePackages=$(zrep_global_downloader "${remoteFile}")
 
     # Reset global variables
     updatesAvailable=()
@@ -556,24 +576,24 @@ function zrep_download_package() {
   local http_status
   local cmd
 
-  case "${config[global_downloader]}" in
-    curl)
-      downloader="curl"
-      cmd="curl -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
-      ;;
-    wget)
-      downloader="wget"
-      cmd="wget -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
-      ;;
-    wget2)
-      downloader="wget2"
-      cmd="wget2 -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
-      ;;
-    *)
-      zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
-      return 1
-      ;;
-  esac
+case "${config[global_downloader]}" in
+  curl)
+    downloader="curl"
+    cmd="curl -A \"zrep ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
+    ;;
+  wget)
+    downloader="wget"
+    cmd="wget -U \"zrep ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
+    ;;
+  wget2)
+    downloader="wget2"
+    cmd="wget2 -U \"zrep ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
+    ;;
+  *)
+    zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
+    return 1
+    ;;
+esac
 
   while (( attempt <= retries )); do
     zrep_msg sub "Attempt $attempt of $retries: Downloading using $downloader..."
