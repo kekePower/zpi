@@ -1,4 +1,4 @@
-<img src="zrep-logo.svg" width="150" align="left">
+<img src="zrep-logo.png" width="150" align="left">
 
 # Zsh Repository Tool (zrep)
 
