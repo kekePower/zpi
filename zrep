@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.3" # Sun-2024-03-17
+VERSION="0.0.4" # Sun-2024-03-31
 ZREP="Zsh Repository Tool"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -480,13 +480,13 @@ function zrep_global_downloader() {
             exit
             ;;
     esac
-    eval ${dloader} ${1}
+    eval ${dloader} "${1}"
 }
 
 typeset -A updatesAvailable
 function zrep_check_for_updates() {
 
-    local remoteFile="${config[global_repo_url]}/packages.json"
+    local remoteFile="${config[global_repo_url]}/packages.json\?$(date +%s)"
     # local localFile="${config[main_zrep_install_dir]}/installed.json"
     zrep_installed_json
     local remotePackages=$(zrep_global_downloader "${remoteFile}")
@@ -524,7 +524,6 @@ function zrep_update_package() {
     local specificPackage=${1}
     zrep_check_for_updates
 
-    # Check if in update mode or specific package update
     if [[ -n "${specificPackage}" ]]; then
         # Logic for updating a specific package
         # Assuming specificPackage format is "author/script"
@@ -541,17 +540,30 @@ function zrep_update_package() {
         fi
     else
         if [[ ${updates} == "true" ]]; then
-            # General update mode: update all packages listed in updatesAvailable
-            for package in ${(k)updatesAvailable}; do
-                local author=${package%%/*}
-                local script=${package#*/}
-                local version=${updatesAvailable[${package}]}
-                # local dlurl="${config[global_repo_url]}/download.php?a=${author}&s=${script}&v=${version}"
+            # Prompt the user only if updates are available
+            echo "New updates are available. Do you want to proceed with updating? (Y/n): "
+            read -q "response?"
+            echo # Move to a new line
 
-                # echo "Preparing to update $package to version $version..."
-                local install_pkg="${author}/${script}"
-                zrep_install_package u ${install_pkg}
-            done
+            # Set the default response to 'Y' if no input is entered
+            response=${response:-Y}
+
+            # Proceed with update if the response is 'Y' or 'y'
+            if [[ $response =~ ^[Yy]$ ]]; then
+                # General update mode: update all packages listed in updatesAvailable
+                for package in ${(k)updatesAvailable}; do
+                    local author=${package%%/*}
+                    local script=${package#*/}
+                    local version=${updatesAvailable[${package}]}
+                    # local dlurl="${config[global_repo_url]}/download.php?a=${author}&s=${script}&v=${version}"
+
+                    # echo "Preparing to update $package to version $version..."
+                    local install_pkg="${author}/${script}"
+                    zrep_install_package u ${install_pkg}
+                done
+            else
+                zrep_msg info "Update canceled."
+            fi
         fi
     fi
 }
@@ -575,46 +587,49 @@ function zrep_download_package() {
   local downloader=""
   local http_status
   local cmd
+  local exit_status
 
-case "${config[global_downloader]}" in
-  curl)
-    downloader="curl"
-    cmd="curl -A \"zrep ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
-    ;;
-  wget)
-    downloader="wget"
-    cmd="wget -U \"zrep ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
-    ;;
-  wget2)
-    downloader="wget2"
-    cmd="wget2 -U \"zrep ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\"; echo $?"
-    ;;
-  *)
-    zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
-    return 1
-    ;;
-esac
+  case "${config[global_downloader]}" in
+    curl)
+      downloader="curl"
+      cmd="curl -L -A \"zrep ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
+      ;;
+    wget)
+      downloader="wget"
+      cmd="wget -L -U \"zrep ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\""
+      ;;
+    wget2)
+      downloader="wget2"
+      cmd="wget2 -L -U \"zrep ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\""
+      ;;
+    *)
+      zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
+      return 1
+      ;;
+  esac
 
   while (( attempt <= retries )); do
-    zrep_msg sub "Attempt $attempt of $retries: Downloading using $downloader..."
+    # zrep_msg sub "Attempt $attempt of $retries: Downloading using $downloader..."
 
     if [[ $downloader == "curl" ]]; then
-      eval $cmd
-      http_status="${PIPESTATUS[0]}"
-    else # wget or wget2
       http_status=$(eval $cmd)
+      exit_status=$?
+      # For curl, check HTTP status is 200 and exit status is 0
+      if [[ $exit_status -eq 0 && $http_status -eq 200 ]]; then
+        # zrep_msg sub "a.Download successful."
+        return 0
+      fi
+    else # wget or wget2
+      eval $cmd
+      exit_status=$?
+      # For wget/wget2, just check exit status is 0
+      if [[ $exit_status -eq 0 ]]; then
+        # zrep_msg sub "b.Download successful."
+        return 0
+      fi
     fi
-
-    # Check if download command was successful (0 exit status) and, for curl, HTTP status is 200 (OK)
-    if [[ $down_status -eq 0 && ($downloader != "curl" || $http_status -eq 200) ]]; then
-      zrep_msg sub "Download successful."
-      return 0
-    else
-      zrep_msg debug "Error: Failed to download the package. HTTP status (curl only): ${http_status}."
-      ((attempt++))
-      zrep_msg info "Waiting ${delay} seconds before retrying..."
-      sleep $delay
-    fi
+    sleep $delay
+    ((attempt++))
   done
 
   zrep_msg debug "Error: The download failed after $retries attempts."
@@ -627,20 +642,20 @@ function zrep_install_package() {
     if [[ ${1} == "u" ]]; then
         updates=true
         local package=${2}
-        echo "zrep_install_package: package=$package"
+        #echo "zrep_install_package: package=$package"
     else
         updates=false
         local package="${1}"
         # Call zrep_check_if_installed to check if the package is already installed
         if zrep_check_if_installed "${package}"; then
-            zrep_msg info "Package ${package} is already installed."
+            zrep_msg debug "\nPackage ${package} is already installed."
             zrep_msg info "Use 'zrep list' to see installed packages."
             return 0
         fi
     fi
 
     # If not installed, proceed with fetching the package information
-    zrep_parse_remote "${config[global_repo_url]}/packages.json" "${package}"
+    zrep_parse_remote "${config[global_repo_url]}/packages.json\?$(date +%s)" "${package}"
 
     local tmpDir="${config[main_zrep_install_dir]}/tmp"
 
@@ -649,7 +664,7 @@ function zrep_install_package() {
     local zipFile="${tmpDir}/${author}-${script}-${version}.zip"
     zrep_download_package "${zipFile}" "${dlurl}"
 
-    unzip -q -aa -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
+    unzip -q -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
 
     if [[ $? -ne 0 ]]; then
         zrep_msg debug "\nError: Failed to unzip the package."
