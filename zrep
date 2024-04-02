@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.4" # Sun-2024-03-31
+VERSION="0.0.5" # Tue-2024-04-02
 ZREP="Zsh Repository Tool"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -646,6 +646,11 @@ function zrep_install_package() {
     else
         updates=false
         local package="${1}"
+        # Ensure package name is in 'author/package' format
+        if [[ ! "${package}" =~ ^.+/[^/]+$ ]]; then
+            zrep_msg debug "\nError: Package name must be in 'author/package' format."
+            return 1
+        fi
         # Call zrep_check_if_installed to check if the package is already installed
         if zrep_check_if_installed "${package}"; then
             zrep_msg debug "\nPackage ${package} is already installed."
