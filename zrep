@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.5" # Tue-2024-04-02
+VERSION="0.0.6" # Wed-2024-04-03
 ZREP="Zsh Repository Tool"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -174,7 +174,7 @@ function zrep_init() {
 zrep_install_dir = ${install_dir}
 
 [global]
-repo_url = https://kekepower.com/zrep
+repo_url = https://zrep.kekepower.com
 theme = classic
 downloader = ${downloader}
 EOF
@@ -232,6 +232,8 @@ EOF
         zrep_global_downloader https://git.kekepower.com/kekePower/zrep/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
     fi
     echo "zrep initialization complete."
+    echo "You should copy 'zrep' to a path in you 'PATH' so that it's accessible."
+    echo "For example '${HOME}/bin'"
     echo "Remember to 'source ${zshrc_file}' to load the 'zrep' settings."
 }
 
