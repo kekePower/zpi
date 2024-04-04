@@ -2,13 +2,17 @@
 
 setopt extendedglob
 
-VERSION="0.0.6" # Wed-2024-04-03
+VERSION="0.0.7" # Fri-2024-04-05
 ZREP="Zsh Repository Tool"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
 
 function zrep_fpath() {
     local base_dir="${1}"
+    local mode="${2:-generic}"  # Default mode is 'generic'
+
+    # Ensure globbing finds dotfiles and nullglob avoids empty directory issues
+    setopt local_options dotglob nullglob
 
     # Check if the base directory exists
     if [[ ! -d "${base_dir}" ]]; then
@@ -16,12 +20,28 @@ function zrep_fpath() {
         return 1
     fi
 
-    # Add directories containing at least one file to fpath
-    for dir in ${base_dir}/**/*(/N); do
-        if [[ -n $(ls -A "${dir}/") ]]; then
-            fpath=(${dir} $fpath)
-        fi
-    done
+    if [[ "${mode}" == "zrep_load" ]]; then
+        # Specific mode for first_letter/author/script structure
+        for one_char_dir in ${base_dir}/?; do
+            [[ -d "${one_char_dir}" ]] || continue
+
+            for script_dir in ${one_char_dir}/*/*(/); do
+                local script_name=$(basename "${script_dir}")
+                local matching_files=("${script_dir}/${script_name}".*)
+
+                if (( ${#matching_files} )); then
+                    fpath+=("${script_dir}")
+                fi
+            done
+        done
+    else
+        # Generic mode for any directory containing at least one file
+        for dir in ${base_dir}/**/*(/N); do
+            if [[ -n $(ls -A "${dir}/") ]]; then
+                fpath+=("${dir}")
+            fi
+        done
+    fi
 }
 
 if [[ ${1} != "init" ]]; then
@@ -114,6 +134,65 @@ function zrep_msg() {
 
     printf "%b\n" "${color}${message}${base_colors[end]}"
 }
+
+#################################################################################################
+# Function to URL-encode strings in Zsh
+zrep_search_url_encode() {
+    local string="${1}"
+    local strlen=${#string}
+    local encoded=""
+
+    for (( pos=0 ; pos<strlen ; pos++ )); do
+        c=${string:$pos:1}
+        case "$c" in
+            [-_.~a-zA-Z0-9] ) o="${c}" ;;
+            * )               printf -v o '%%%02x' "'$c"
+        esac
+        encoded+="${o}"
+    done
+
+    echo "${encoded}"
+    # This will output the URL-encoded string
+}
+
+# Function to perform a search query and process JSON response
+zrep_search() {
+    local searchTerm="${@}"
+
+    local encodedSearch=$(zrep_search_url_encode "${searchTerm}")
+
+    # Use the global_repo_url from the config associative array
+    local response=$(curl -s -A "zrep ${VERSION} (curl)" "${config[global_repo_url]}/find.php?s=${encodedSearch}")
+
+    # Determine if the JSON response is an object indicating "No scripts found"
+    local jsonType=$(echo "$response" | jq -r 'type')
+
+    zrep_msg std "\nSearch results:"
+    if [[ "$jsonType" == "object" ]]; then
+        # Assuming an object type indicates a message field exists
+        local message=$(echo "$response" | jq -r '.message')
+        echo "$message"
+        return 0
+    elif [[ "$jsonType" == "array" ]]; then
+        # It's an array, process each item
+        echo "$response" | jq -c '.[]' | while IFS= read -r line; do
+            local script=$(echo "$line" | jq -r '.script')
+            local description=$(echo "$line" | jq -r '.description')
+            local url=$(echo "$line" | jq -r '.url')
+
+            # You can process these variables further as needed
+            zrep_msg other " * $script"
+            zrep_msg sub " - Description: $description"
+            zrep_msg sub " - $url"
+            # echo "-------------------------------------"
+        done
+    else
+        echo "Unexpected JSON format."
+        return 1
+    fi
+}
+
+############################################################################################
 
 # Function to check if a given string exists in ~/.zshrc
 function zrep_find_string() {
@@ -264,17 +343,15 @@ function zrep_parse_remote() {
     json_data=$(zrep_global_downloader "${url}")
 
     # Directly extract the details based on author_name and script_name
-    dlurl=$(echo "${json_data}" | jq -r --arg author_name "$author_name" --arg script_name "$script_name" '.authors[] | select(.name==$author_name) | .scripts[] | select(.name==$script_name) | .dlurl')
     version=$(echo "${json_data}" | jq -r --arg author_name "$author_name" --arg script_name "$script_name" '.authors[] | select(.name==$author_name) | .scripts[] | select(.name==$script_name) | .version')
 
     # Check if the dlurl and version are found
-    if [[ -n "$dlurl" && -n "$version" ]]; then
+    if [[ -n "$version" ]]; then
         # Set the details as global
-        export author="$author_name"
-        export script="$script_name"
+        #export author="$author_name"
+        #export script="$script_name"
         export version
-        export dlurl
-
+        #export dlurl
     else
         zrep_msg debug "\nPackage ${package} not found.\n"
         exit 1
@@ -356,40 +433,19 @@ function zrep_list_package() {
     fi
 }
 
-# Function to load configuration
 function zrep_load_config() {
 
-    # Check if jq is available
-    if ! command -v jq &> /dev/null; then
+    if [[ ! -x $(which jq) ]]; then
         echo "Error: 'jq' is not installed. Please install jq to continue."
         exit 1
     fi
 
     if [[ -f "${ZREP_CONFIG}" ]]; then
         zini "${ZREP_CONFIG}"
-        zrep_fpath ${config[main_zrep_install_dir]}
+        zrep_fpath ${config[main_zrep_install_dir]} zrep_load
     else
-        if [[ "${1}" == "init" ]]; then
-            echo "\nWelcome to zrep. Looks like this is the first time you are"
-            echo "running me."
-            read "response?Are you ready to set up zrep? (y/n): "
-            if [[ "${response}" =~ ^[Yy]$ ]]; then
-                zrep_init
-            else
-                echo "Setup aborted. Try again later."
-            fi
-        else
-            # echo "${ZREP_CONFIG} not found."
-            # Ask the user if they want to run 'zrep init'
-            echo "\nWelcome to zrep. I was unable to find the config file."
-            read "response?Would you like to run 'zrep init' to set up? (y/n): "
-            if [[ "${response}" =~ ^[Yy]$ ]]; then
-                zrep_init
-            else
-                echo "Initialization canceled. Please run 'zrep init' manually to set up."
-                exit 1
-            fi
-        fi
+        echo "${ZREP_CONFIG} not found. Run 'zrep init' to set up."
+        exit 1
     fi
 
 }
@@ -414,10 +470,11 @@ function zrep_remove_package() {
     local first_letter="${author:0:1:l}"
     local package_dir="${config[main_zrep_install_dir]}/${first_letter}/${author}/${script}"
 
-    zrep_msg info "\nFound installed package: $package_name, version: $installed_version"
+    zrep_msg std "\nFound installed package: $package_name, version: $installed_version"
 
     # Ask user for confirmation with default response "Y"
-    read "REPLY?Are you sure you want to remove this package? (y/n) [Y]: "
+    zrep_msg info "Are you sure you want to remove this package? (y/n) [Y]: \c"
+    read REPLY
     REPLY=${REPLY:-Y}
     echo
 
@@ -425,7 +482,6 @@ function zrep_remove_package() {
         # Remove the package directory from disk
         if [[ -d "${package_dir}" ]]; then
             rm -rf "${package_dir}"
-            zrep_msg sub "Package directory '${package_dir}' removed successfully."
         else
             zrep_msg debug "Warning: Package directory '${package_dir}' not found."
         fi
@@ -436,7 +492,7 @@ function zrep_remove_package() {
            if .[$author] == [] then del(.[$author]) else . end' \
           "$installed_json" > "$installed_json.tmp" && mv "$installed_json.tmp" "$installed_json"
 
-        zrep_msg sub "Package '${package_name}' removed successfully from installed.json."
+        zrep_msg sub "Package '${package_name}' successfully removed."
     else
         zrep_msg info "Removal canceled."
     fi
@@ -458,10 +514,8 @@ function zrep_check_if_installed() {
 
     if [[ -n "${installed_version}" && "${installed_version}" != "null" ]]; then
         # Package is installed, and version is stored in installed_version
-        # echo "Package $package is installed with version $installed_version."
         return 0  # Package is installed
     else
-        # echo "Package $package is not installed."
         return 1  # Package is not installed
     fi
 }
@@ -482,13 +536,16 @@ function zrep_global_downloader() {
             exit
             ;;
     esac
+
     eval ${dloader} "${1}"
 }
 
 typeset -A updatesAvailable
 function zrep_check_for_updates() {
 
-    local remoteFile="${config[global_repo_url]}/packages.json\?$(date +%s)"
+    # Now using a zrep API to fetch the JSON for checking for updates. This _may_ change in the
+    # future if the load on the DB gets too high.
+    local remoteFile="${config[global_repo_url]}/getver.php"
     # local localFile="${config[main_zrep_install_dir]}/installed.json"
     zrep_installed_json
     local remotePackages=$(zrep_global_downloader "${remoteFile}")
@@ -533,8 +590,6 @@ function zrep_update_package() {
         if [[ -n "$version" ]]; then
             local author="${specificPackage%%/*}"
             local script="${specificPackage#*/}"
-            # local dlurl="${config[global_repo_url]}/download.php?a=${author}&s=${script}&v=${version}"
-            # echo "Updating $specificPackage to version $version..."
             local install_pkg="${author}/${script}"
             zrep_install_package u ${install_pkg}
         else
@@ -557,9 +612,6 @@ function zrep_update_package() {
                     local author=${package%%/*}
                     local script=${package#*/}
                     local version=${updatesAvailable[${package}]}
-                    # local dlurl="${config[global_repo_url]}/download.php?a=${author}&s=${script}&v=${version}"
-
-                    # echo "Preparing to update $package to version $version..."
                     local install_pkg="${author}/${script}"
                     zrep_install_package u ${install_pkg}
                 done
@@ -662,13 +714,15 @@ function zrep_install_package() {
     fi
 
     # If not installed, proceed with fetching the package information
-    zrep_parse_remote "${config[global_repo_url]}/packages.json\?$(date +%s)" "${package}"
+    # Using the new zrep API to get the package version
+    zrep_parse_remote "${config[global_repo_url]}/getver.php\?p\=${package}" ${package}
 
     local tmpDir="${config[main_zrep_install_dir]}/tmp"
 
     mkdir -p "${tmpDir}"
 
     local zipFile="${tmpDir}/${author}-${script}-${version}.zip"
+    dlurl="${config[global_repo_url]}/download/${package}/${version}"
     zrep_download_package "${zipFile}" "${dlurl}"
 
     unzip -q -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
@@ -806,9 +860,10 @@ function zrep_help() {
   zrep_msg info "  update (u) <author/package>:\t\t\tUpdate zrep package"
   zrep_msg info "  enable <author/package>:\t\t\tEnable zrep package"
   zrep_msg info "  disable <author/package>:\t\t\tDisable zrep package"
+  zrep_msg info "  search 'search term':\t\t\t\tSearch for authors, packages or description"
   zrep_msg info "  version:\t\t\t\t\tDisplay zrep version"
   zrep_msg info "  list:\t\t\t\t\t\tList installed packages"
-  zrep_msg info "  <author/package> help:\t\t\tDisplay help for pacakage (if available)"
+  zrep_msg info "  <author/package> help:\t\t\tDisplay help for package (if available)"
 
 }
 
@@ -861,6 +916,7 @@ function zrep_read_usage() {
 function main() {
 
     zrep_main_version_string
+
     if [[ ${1} != "init" ]]; then
         zrep_load_config ${1}
         zrep_load_theme ${config[global_theme]}
@@ -878,6 +934,9 @@ function main() {
     	    zrep_init
             zrep_check_for_deps
     	    exit
+            ;;
+        search | s | find)
+            zrep_search "${@:2}"
             ;;
         install | i)
             zrep_install_package ${2}
