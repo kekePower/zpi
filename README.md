@@ -26,6 +26,8 @@ You can read more in the Wiki.
 
 To start using zrep, simply run the `zrep init` command to initialize the tool. zrep will guide you through the setup process and create the required configuration files.
 
+Use the search function on **[the zrep website](https://zrep.kekepower.com)** to find useful scripts until a search function is added to the `zrep` script some time in the future.
+
 Once initialized, you can explore and install packages using commands like `zrep install <author/package>`, `zrep list`, and `zrep enable <author/package>`.
 
 ## Contributing
