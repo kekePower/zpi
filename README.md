@@ -4,6 +4,12 @@
 
 zrep is a powerful and user-friendly package manager for the Zsh shell. It allows you to easily install, manage, and share Zsh packages, such as plugins, themes, and scripts, directly from a central repository.
 
+## What is it?
+
+`zrep` in and of itself is the command line tool that you use to install and manage scripts that are placed in `$fpath` used by Zsh. The packages are available on [the zrep website](https://zrep.kekepower.com) where you can, if you want to share your own scripts, register for an account. By sharing your scripts with the community, you are probably making somebody's day easier.
+
+You can read more in the Wiki.
+
 ## Key Features
 
 - **Easy Installation**: zrep simplifies the process of installing Zsh packages. With a single command, you can install packages from the zrep repository.
