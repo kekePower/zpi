@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.7" # Fri-2024-04-05
+VERSION="0.0.8" # Fri-2024-04-05
 ZREP="Zsh Repository Tool"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -540,6 +540,17 @@ function zrep_global_downloader() {
     eval ${dloader} "${1}"
 }
 
+function zrep_process_updates() {
+    for package in ${(k)updatesAvailable}; do
+        local updateDetails=(${(s/|/)updatesAvailable[${package}]})
+        local author=${updateDetails[1]}
+        local script=${updateDetails[2]}
+        local version=${updateDetails[3]}
+        echo "Updating ${author}/${script} to version ${version}..."
+        zrep_install_package u "${author}/${script}" "${version}"
+    done
+}
+
 typeset -A updatesAvailable
 function zrep_check_for_updates() {
 
@@ -567,7 +578,9 @@ function zrep_check_for_updates() {
                                '.authors[] | select(.name==$author) | .scripts[] | select(.name==$script) | .version' <<<"$remotePackages")
 
         if [[ "${remote_version}" > "${installed_version}" ]]; then
-            updatesAvailable[${author}/${script}]="${remote_version}"
+            # updatesAvailable[${author}/${script}]="${remote_version}"
+            # Store author, script, and version in a single string, separated by "|"
+            updatesAvailable[${author}/${script}]="${author}|${script}|${remote_version}"
             zrep_msg info "\n${author}/${script} can be updated from ${installed_version} to ${remote_version}"
             updates=true # Mark that updates are available
         fi
@@ -598,8 +611,8 @@ function zrep_update_package() {
     else
         if [[ ${updates} == "true" ]]; then
             # Prompt the user only if updates are available
-            echo "New updates are available. Do you want to proceed with updating? (Y/n): "
-            read -q "response?"
+            zrep_msg sub "New updates are available. Do you want to proceed with updating? (Y/n): \c"
+            read "response"
             echo # Move to a new line
 
             # Set the default response to 'Y' if no input is entered
@@ -607,14 +620,8 @@ function zrep_update_package() {
 
             # Proceed with update if the response is 'Y' or 'y'
             if [[ $response =~ ^[Yy]$ ]]; then
-                # General update mode: update all packages listed in updatesAvailable
-                for package in ${(k)updatesAvailable}; do
-                    local author=${package%%/*}
-                    local script=${package#*/}
-                    local version=${updatesAvailable[${package}]}
-                    local install_pkg="${author}/${script}"
-                    zrep_install_package u ${install_pkg}
-                done
+                # Call zrep_process_updates to handle all updates.
+                zrep_process_updates
             else
                 zrep_msg info "Update canceled."
             fi
@@ -715,7 +722,7 @@ function zrep_install_package() {
 
     # If not installed, proceed with fetching the package information
     # Using the new zrep API to get the package version
-    zrep_parse_remote "${config[global_repo_url]}/getver.php\?p\=${package}" ${package}
+    # zrep_parse_remote "${config[global_repo_url]}/getver.php\?p\=${package}" ${package}
 
     local tmpDir="${config[main_zrep_install_dir]}/tmp"
 
