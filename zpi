@@ -3,7 +3,7 @@
 setopt extendedglob
 
 VERSION="0.0.8" # Fri-2024-04-05
-ZREP="Zsh Repository Tool"
+ZREP="Zrep Package Installer"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
 
@@ -234,7 +234,7 @@ function zrep_init() {
     if [[ ! -f ${ZREP_CONFIG} ]]; then
         echo "${ZREP_CONFIG} not found. Creating it..."
         # Prompt user for install directory
-        read "install_dir?Enter zrep installation directory [${HOME}/.zrep]: "
+        read "install_dir?Enter zpi installation directory [${HOME}/.zrep]: "
         install_dir=${install_dir:-"${HOME}/.zrep"}
         mkdir -p ${install_dir}
         read "downloader?Choose command to download packages [curl, wget, wget2]: "
@@ -857,18 +857,18 @@ function zrep_disable() {
 # Help function to display available options
 function zrep_help() {
 
-  zrep_msg sub "\nUsage: zrep <command> [arguments]"
+  zrep_msg sub "\nUsage: ${ZSH_SCRIPT:t} <command> [arguments]"
   zrep_msg info "Available commands:"
-    if [[ ! -f ${ZREP_CONFIG} ]]; then
-        zrep_msg info "  init: Initialize zrep"
-    fi
+  if [[ ! -f ${ZREP_CONFIG} ]]; then
+    zrep_msg info "  init: Initialize zpi"
+  fi
   zrep_msg info "  install (i) <author/package>:\t\t\tInstall a package"
   zrep_msg info "  remove (rm, delete, del) <author/package>:\tRemove a package"
-  zrep_msg info "  update (u) <author/package>:\t\t\tUpdate zrep package"
-  zrep_msg info "  enable <author/package>:\t\t\tEnable zrep package"
-  zrep_msg info "  disable <author/package>:\t\t\tDisable zrep package"
+  zrep_msg info "  update (u) <author/package>:\t\t\tUpdate zpi package"
+  zrep_msg info "  enable <author/package>:\t\t\tEnable zpi package"
+  zrep_msg info "  disable <author/package>:\t\t\tDisable zpi package"
   zrep_msg info "  search 'search term':\t\t\t\tSearch for authors, packages or description"
-  zrep_msg info "  version:\t\t\t\t\tDisplay zrep version"
+  zrep_msg info "  version:\t\t\t\t\tDisplay zpi version"
   zrep_msg info "  list:\t\t\t\t\t\tList installed packages"
   zrep_msg info "  <author/package> help:\t\t\tDisplay help for package (if available)"
 
@@ -952,7 +952,7 @@ function main() {
             # Parse the command argument to extract the package name
             zrep_remove_package_name="${2:-}"
             if [[ -z "${zrep_remove_package_name}" ]]; then
-                zrep_msg info "\nUsage: zrep ${1} author/package"
+                zrep_msg info "\nUsage: zpi ${1} author/package"
             else
                 zrep_remove_package "${zrep_remove_package_name}"
             fi
