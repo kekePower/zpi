@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.8" # Fri-2024-04-05
+VERSION="0.0.9" # Sat-2024-04-06
 ZREP="Zrep Package Installer"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -109,7 +109,7 @@ function zrep_main_version_string() {
 function zrep_version() {
   zrep_msg info "\nCreated by kekePower - 2024"
   zrep_msg info "License: MIT"
-  zrep_msg info "https://git.kekepower.com/kekePower/zrep/"
+  zrep_msg info "https://git.kekepower.com/kekePower/zpi/"
   zrep_msg info "Please see '${base_colors[${current_theme[help]}]}${ZSH_SCRIPT:t} help${base_colors[end]}${base_colors[${current_theme[info]}]}' for more info${base_colors[end]}"
   exit
 }
@@ -162,7 +162,7 @@ zrep_search() {
     local encodedSearch=$(zrep_search_url_encode "${searchTerm}")
 
     # Use the global_repo_url from the config associative array
-    local response=$(curl -s -A "zrep ${VERSION} (curl)" "${config[global_repo_url]}/find.php?s=${encodedSearch}")
+    local response=$(curl -s -A "${ZSH_SCRIPT:t} ${VERSION} (curl)" "${config[global_repo_url]}/find.php?s=${encodedSearch}")
 
     # Determine if the JSON response is an object indicating "No scripts found"
     local jsonType=$(echo "$response" | jq -r 'type')
@@ -297,7 +297,7 @@ if [[ -n \${addons[@]} ]]; then
     autoload -Uz \$(basename \${addon})
     done
 else
-    echo "zrep: No addons enabled."
+    echo "zpi: No addons enabled."
 fi
 EOF
         echo "File .zrep_addons created and configured."
@@ -308,12 +308,12 @@ EOF
     if [[ ! -d ${install_dir}/themes ]]; then
         echo "Installing the Classic theme to ${install_dir}/themes"
         mkdir -p ${install_dir}/themes
-        zrep_global_downloader https://git.kekepower.com/kekePower/zrep/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
+        zrep_global_downloader https://git.kekepower.com/kekePower/zpi/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
     fi
-    echo "zrep initialization complete."
-    echo "You should copy 'zrep' to a path in you 'PATH' so that it's accessible."
+    echo "zpi initialization complete."
+    echo "You should copy 'zpi' to a path in you 'PATH' so that it's accessible."
     echo "For example '${HOME}/bin'"
-    echo "Remember to 'source ${zshrc_file}' to load the 'zrep' settings."
+    echo "Remember to 'source ${zshrc_file}' to load the 'zpi' settings."
 }
 
 function zrep_installed_json() {
@@ -379,7 +379,7 @@ else
     .[$author] = [{"script": $script, "version": $version}]
 end' "$installed_json" > "$installed_json.tmp" && mv "$installed_json.tmp" "$installed_json"
 
-    zrep_msg info " - Package '$script' by '$author' version $version installed/updated successfully."
+    zrep_msg info "\n - Package '$author/$script' version $version installed/updated successfully."
 }
 
 # Function to list installed packages from installed.json
@@ -444,7 +444,7 @@ function zrep_load_config() {
         zini "${ZREP_CONFIG}"
         zrep_fpath ${config[main_zrep_install_dir]} zrep_load
     else
-        echo "${ZREP_CONFIG} not found. Run 'zrep init' to set up."
+        echo "${ZREP_CONFIG} not found. Run 'zpi init' to set up."
         exit 1
     fi
 
@@ -463,7 +463,7 @@ function zrep_remove_package() {
 
     if [[ -z "$installed_version" || "$installed_version" == "null" ]]; then
         zrep_msg debug "\nError: Package '${package_name}' is not installed."
-        zrep_msg info "Please see 'zrep list' for installed packages."
+        zrep_msg info "Please see 'zpi list' for installed packages."
         return 1
     fi
 
@@ -523,13 +523,13 @@ function zrep_check_if_installed() {
 function zrep_global_downloader() {
     case ${config[global_downloader]} in
         curl)
-            dloader="curl -s -A \"zrep ${VERSION} (curl)\""
+            dloader="curl -s -A \"${ZSH_SCRIPT} ${VERSION} (curl)\""
             ;;
         wget)
-            dloader="wget -q -U \"zrep ${VERSION} (wget)\""
+            dloader="wget -q -U \"${ZSH_SCRIPT} ${VERSION} (wget)\""
             ;;
         wget2)
-            dloader="wget2 -q -U \"zrep ${VERSION} (wget2)\""
+            dloader="wget2 -q -U \"${ZSH_SCRIPT} ${VERSION} (wget2)\""
             ;;
         *)
             echo "Invalid Downloader."
@@ -653,15 +653,15 @@ function zrep_download_package() {
   case "${config[global_downloader]}" in
     curl)
       downloader="curl"
-      cmd="curl -L -A \"zrep ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
+      cmd="curl -L -A \"${ZSH_SCRIPT} ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
       ;;
     wget)
       downloader="wget"
-      cmd="wget -L -U \"zrep ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\""
+      cmd="wget -L -U \"${ZSH_SCRIPT} ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\""
       ;;
     wget2)
       downloader="wget2"
-      cmd="wget2 -L -U \"zrep ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\""
+      cmd="wget2 -L -U \"${ZSH_SCRIPT} ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\""
       ;;
     *)
       zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
@@ -715,18 +715,20 @@ function zrep_install_package() {
         # Call zrep_check_if_installed to check if the package is already installed
         if zrep_check_if_installed "${package}"; then
             zrep_msg debug "\nPackage ${package} is already installed."
-            zrep_msg info "Use 'zrep list' to see installed packages."
+            zrep_msg info "Use 'zpi list' to see installed packages."
             return 0
         fi
+
+	zrep_parse_remote "${config[global_repo_url]}/getver.php\?p\=${package}" ${package}
     fi
 
-    # If not installed, proceed with fetching the package information
-    # Using the new zrep API to get the package version
-    # zrep_parse_remote "${config[global_repo_url]}/getver.php\?p\=${package}" ${package}
 
     local tmpDir="${config[main_zrep_install_dir]}/tmp"
 
     mkdir -p "${tmpDir}"
+
+    author="${package%/*}"
+    script="${package#*/}"
 
     local zipFile="${tmpDir}/${author}-${script}-${version}.zip"
     dlurl="${config[global_repo_url]}/download/${package}/${version}"
@@ -850,7 +852,7 @@ function zrep_disable() {
         echo ")"
     } > ${config[main_zrep_install_dir]}/.addons
 
-    zrep_msg info "\nPackage '${package_name} (${script})' has been disabled and removed from fpath."
+    zrep_msg info "\nPackage '${package_name}' has been disabled and removed from fpath."
     zrep_msg info "You may have to run 'source ~/.zrep_addons' to remove it from your shell."
 }
 
