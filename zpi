@@ -84,7 +84,7 @@ typeset -A base_colors=(
 # Define the global associative array to hold the current theme
 declare -A current_theme
 
-zrep_load_theme() {
+function zrep_load_theme() {
   local theme_name="$1"
   local theme_file="${config[main_zrep_install_dir]}/themes/${theme_name}"
 
@@ -137,7 +137,7 @@ function zrep_msg() {
 
 #################################################################################################
 # Function to URL-encode strings in Zsh
-zrep_search_url_encode() {
+function zrep_search_url_encode() {
     local string="${1}"
     local strlen=${#string}
     local encoded=""
@@ -156,7 +156,7 @@ zrep_search_url_encode() {
 }
 
 # Function to perform a search query and process JSON response
-zrep_search() {
+function zrep_search() {
     local searchTerm="${@}"
 
     local encodedSearch=$(zrep_search_url_encode "${searchTerm}")
