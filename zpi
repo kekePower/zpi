@@ -521,23 +521,50 @@ function zrep_check_if_installed() {
 }
 
 function zrep_global_downloader() {
+    local downloadURL="${1}"
+    local outputFile="${2:-}" # Optional, used for downloading files
+    local cmd
+    local http_status
+    local exit_status
+    local retries=5
+    local delay=5
+    local attempt=0
+
     case ${config[global_downloader]} in
         curl)
-            dloader="curl -s -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\""
+            cmd="curl -s -L -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\""
+            [[ -n $outputFile ]] && cmd+=" -o \"$outputFile\""
+            cmd+=" -w \"%{http_code}\" \"$downloadURL\""
             ;;
-        wget)
-            dloader="wget -q -U \"${ZSH_SCRIPT:t} ${VERSION} (wget)\""
-            ;;
-        wget2)
-            dloader="wget2 -q -U \"${ZSH_SCRIPT:t} ${VERSION} (wget2)\""
+        wget|wget2)
+            cmd="${config[global_downloader]} -q -L -U \"${ZSH_SCRIPT:t} ${VERSION} (${config[global_downloader]})\""
+            [[ -n $outputFile ]] && cmd+=" -O \"$outputFile\""
+            cmd+=" \"$downloadURL\""
             ;;
         *)
-            echo "Invalid Downloader."
-            exit
+            echo "Unsupported downloader."
+            return 1
             ;;
     esac
 
-    eval ${dloader} "${1}"
+    while (( ++attempt <= retries )); do
+        if [[ ${config[global_downloader]} == "curl" ]]; then
+            http_status=$(eval $cmd)
+            exit_status=$?
+            if [[ $exit_status -eq 0 && ( -z $outputFile || $http_status -eq 200 ) ]]; then
+                return 0
+            fi
+        else
+            eval $cmd
+            exit_status=$?
+            if [[ $exit_status -eq 0 ]]; then
+                return 0
+            fi
+        fi
+        sleep $delay
+    done
+    echo "Download failed after $retries attempts."
+    return 1
 }
 
 function zrep_process_updates() {
@@ -629,72 +656,17 @@ function zrep_update_package() {
     fi
 }
 
-# Enhanced zrep_downloader function with error handling and retry logic.
-# It attempts to download a file from a given URL to a specified zip file using curl, wget, or wget2 based on the global configuration.
-# This function supports retries and delays between attempts for robust error handling.
-#
-# Usage: zrep_download_package ZipFile DownloadURL
-#
-# Parameters:
-#   DownloadURL: The URL from which to download the file.
-#   ZipFile: The name of the file to save the downloaded content to.
-
 function zrep_download_package() {
-  local ZipFile="${1}"
-  local DownloadURL="${2}"
-  local retries=5
-  local delay=5
-  local attempt=1
-  local downloader=""
-  local http_status
-  local cmd
-  local exit_status
+    local ZipFile="${1}"
+    local DownloadURL="${2}"
 
-  case "${config[global_downloader]}" in
-    curl)
-      downloader="curl"
-      cmd="curl -L -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
-      ;;
-    wget)
-      downloader="wget"
-      cmd="wget -L -U \"${ZSH_SCRIPT:t} ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\""
-      ;;
-    wget2)
-      downloader="wget2"
-      cmd="wget2 -L -U \"${ZSH_SCRIPT:t} ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\""
-      ;;
-    *)
-      zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
-      return 1
-      ;;
-  esac
-
-  while (( attempt <= retries )); do
-    # zrep_msg sub "Attempt $attempt of $retries: Downloading using $downloader..."
-
-    if [[ $downloader == "curl" ]]; then
-      http_status=$(eval $cmd)
-      exit_status=$?
-      # For curl, check HTTP status is 200 and exit status is 0
-      if [[ $exit_status -eq 0 && $http_status -eq 200 ]]; then
-        # zrep_msg sub "a.Download successful."
-        return 0
-      fi
-    else # wget or wget2
-      eval $cmd
-      exit_status=$?
-      # For wget/wget2, just check exit status is 0
-      if [[ $exit_status -eq 0 ]]; then
-        # zrep_msg sub "b.Download successful."
-        return 0
-      fi
+    # Now simply call the unified downloader function
+    if zrep_global_downloader "$DownloadURL" "$ZipFile"; then
+        zrep_msg std "\nDownload successful."
+    else
+        zrep_msg debug "\nDownload failed."
+        return 1
     fi
-    sleep $delay
-    ((attempt++))
-  done
-
-  zrep_msg debug "Error: The download failed after $retries attempts."
-  return 1
 }
 
 # Function to install a package by unzipping it to ${config[main_zrep_install_dir]}
