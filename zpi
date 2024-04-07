@@ -523,13 +523,13 @@ function zrep_check_if_installed() {
 function zrep_global_downloader() {
     case ${config[global_downloader]} in
         curl)
-            dloader="curl -s -A \"${ZSH_SCRIPT} ${VERSION} (curl)\""
+            dloader="curl -s -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\""
             ;;
         wget)
-            dloader="wget -q -U \"${ZSH_SCRIPT} ${VERSION} (wget)\""
+            dloader="wget -q -U \"${ZSH_SCRIPT:t} ${VERSION} (wget)\""
             ;;
         wget2)
-            dloader="wget2 -q -U \"${ZSH_SCRIPT} ${VERSION} (wget2)\""
+            dloader="wget2 -q -U \"${ZSH_SCRIPT:t} ${VERSION} (wget2)\""
             ;;
         *)
             echo "Invalid Downloader."
@@ -653,15 +653,15 @@ function zrep_download_package() {
   case "${config[global_downloader]}" in
     curl)
       downloader="curl"
-      cmd="curl -L -A \"${ZSH_SCRIPT} ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
+      cmd="curl -L -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\" -s -o \"$ZipFile\" \"$DownloadURL\" -w \"%{http_code}\""
       ;;
     wget)
       downloader="wget"
-      cmd="wget -L -U \"${ZSH_SCRIPT} ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\""
+      cmd="wget -L -U \"${ZSH_SCRIPT:t} ${VERSION} (wget)\" -q -O \"$ZipFile\" \"$DownloadURL\""
       ;;
     wget2)
       downloader="wget2"
-      cmd="wget2 -L -U \"${ZSH_SCRIPT} ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\""
+      cmd="wget2 -L -U \"${ZSH_SCRIPT:t} ${VERSION} (wget2)\" -q -O \"$ZipFile\" \"$DownloadURL\""
       ;;
     *)
       zrep_msg debug "Unsupported or unspecified downloader: '${config[global_downloader]}'."
