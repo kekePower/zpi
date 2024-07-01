@@ -86,11 +86,11 @@ declare -A current_theme
 
 function zrep_load_theme() {
   local theme_name="$1"
-  local theme_file="${config[main_zrep_install_dir]}/themes/${theme_name}"
+  local theme_file="/home/stig/.zrep/themes/${theme_name}"
 
   if [[ ! -f "$theme_file" ]]; then
     echo "Error: Theme file for '${theme_name}' not found. Falling back to the 'classic' theme."
-    theme_file="${config[main_zrep_install_dir]}/themes/classic"
+    theme_file="/home/stig/.zrep/themes/classic"
   fi
 
   # Source the theme file, which should define 'theme_colors'
@@ -332,6 +332,7 @@ function zrep_installed_json() {
 
 # Function to parse remote JSON data and extract author, script, and version
 # and return the correct download url
+
 function zrep_parse_remote() {
     local url="${1}"
     local package="${2}"
@@ -339,19 +340,21 @@ function zrep_parse_remote() {
     local script_name="${package#*/}"
     local json_data
 
+    # Print the URL being used for debugging
+    echo "Fetching URL: ${url}"
+
     # Fetch JSON data from the URL
     json_data=$(zrep_global_downloader "${url}")
+
+    # Print the fetched JSON data for debugging
+    echo "Fetched JSON data: ${json_data}"
 
     # Directly extract the details based on author_name and script_name
     version=$(echo "${json_data}" | jq -r --arg author_name "$author_name" --arg script_name "$script_name" '.authors[] | select(.name==$author_name) | .scripts[] | select(.name==$script_name) | .version')
 
     # Check if the dlurl and version are found
     if [[ -n "$version" ]]; then
-        # Set the details as global
-        #export author="$author_name"
-        #export script="$script_name"
         export version
-        #export dlurl
     else
         zrep_msg debug "\nPackage ${package} not found.\n"
         exit 1
@@ -524,22 +527,24 @@ function zrep_global_downloader() {
     local downloadURL="${1}"
     local outputFile="${2:-}" # Optional, used for downloading files
     local cmd
-    local http_status
-    local exit_status
     local retries=5
     local delay=5
     local attempt=0
 
     case ${config[global_downloader]} in
         curl)
-            cmd="curl -s -L -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\""
-            [[ -n $outputFile ]] && cmd+=" -o \"$outputFile\""
-            cmd+=" -w \"%{http_code}\" \"$downloadURL\""
+            if [[ -n $outputFile ]]; then
+                cmd="curl -s -L -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\" -w \"%{http_code}\" -o \"$outputFile\" \"$downloadURL\""
+            else
+                cmd="curl -s -L -A \"${ZSH_SCRIPT:t} ${VERSION} (curl)\" -w \"%{http_code}\" \"$downloadURL\""
+            fi
             ;;
         wget|wget2)
-            cmd="${config[global_downloader]} -q -L -U \"${ZSH_SCRIPT:t} ${VERSION} (${config[global_downloader]})\""
-            [[ -n $outputFile ]] && cmd+=" -O \"$outputFile\""
-            cmd+=" \"$downloadURL\""
+            if [[ -n $outputFile ]]; then
+                cmd="${config[global_downloader]} -q -L -U \"${ZSH_SCRIPT:t} ${VERSION} (${config[global_downloader]})\" -O \"$outputFile\" \"$downloadURL\""
+            else
+                cmd="${config[global_downloader]} -q -L -U \"${ZSH_SCRIPT:t} ${VERSION} (${config[global_downloader]})\" \"$downloadURL\""
+            fi
             ;;
         *)
             echo "Unsupported downloader."
@@ -549,15 +554,22 @@ function zrep_global_downloader() {
 
     while (( ++attempt <= retries )); do
         if [[ ${config[global_downloader]} == "curl" ]]; then
-            http_status=$(eval $cmd)
-            exit_status=$?
-            if [[ $exit_status -eq 0 && ( -z $outputFile || $http_status -eq 200 ) ]]; then
+            local response
+            response=$(eval $cmd)
+            local http_status="${response: -3}"
+            local json_data="${response:0: -3}"
+            if [[ $http_status -eq 200 ]]; then
+                [[ -z $outputFile ]] && echo "$json_data"
                 return 0
+            else
+                echo "HTTP Status: $http_status"
+                return 1
             fi
         else
             eval $cmd
             exit_status=$?
             if [[ $exit_status -eq 0 ]]; then
+                [[ -n $outputFile ]] && cat "$outputFile"
                 return 0
             fi
         fi
@@ -670,6 +682,7 @@ function zrep_download_package() {
 }
 
 # Function to install a package by unzipping it to ${config[main_zrep_install_dir]}
+
 function zrep_install_package() {
 
     if [[ ${1} == "u" ]]; then
@@ -691,23 +704,24 @@ function zrep_install_package() {
             return 0
         fi
 
-	zrep_parse_remote "${config[global_repo_url]}/getver.php\?p\=${package}" ${package}
+        zrep_parse_remote "${config[global_repo_url]}/getver.php?p=${package}" ${package}
     fi
 
-
     local tmpDir="${config[main_zrep_install_dir]}/tmp"
-
     mkdir -p "${tmpDir}"
 
     author="${package%/*}"
     script="${package#*/}"
 
     local zipFile="${tmpDir}/${author}-${script}-${version}.zip"
-    dlurl="${config[global_repo_url]}/download/${package}/${version}"
-    zrep_download_package "${zipFile}" "${dlurl}"
+    local dlurl="${config[global_repo_url]}/download/${package}/${version}"
+    echo "Download URL: ${dlurl}" # Print the download URL for debugging
+    if ! zrep_download_package "${zipFile}" "${dlurl}"; then
+        zrep_msg debug "\nError: Failed to download the package."
+        return 1
+    fi
 
     unzip -q -o "${zipFile}" -d "${config[main_zrep_install_dir]}"
-
     if [[ $? -ne 0 ]]; then
         zrep_msg debug "\nError: Failed to unzip the package."
         return 1
