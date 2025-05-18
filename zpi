@@ -2,7 +2,7 @@
 
 setopt extendedglob
 
-VERSION="0.0.9" # Sat-2024-04-06
+VERSION="0.1.0" # Sat-2025-05-18
 ZREP="Zrep Package Installer"
 # Define the default path to .zreprc
 ZREP_CONFIG="${HOME}/.zreprc"
@@ -223,12 +223,42 @@ function zrep_check_for_deps() {
     done
 }
 
+# Function to check for required dependencies
+function zrep_check_deps() {
+    local missing_deps=()
+    
+    # Check for jq
+    if ! command -v jq &> /dev/null; then
+        missing_deps+=("jq")
+    fi
+    
+    # Check for downloader (curl/wget)
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+        missing_deps+=("curl or wget")
+    fi
+    
+    if [[ ${#missing_deps[@]} -ne 0 ]]; then
+        echo "The following dependencies are required but not installed:"
+        for dep in "${missing_deps[@]}"; do
+            echo "  - ${dep}"
+        done
+        echo "Please install them and try again."
+        return 1
+    fi
+    return 0
+}
+
 # The first step after downloading zrep.
 # Here we create the default file and directory structure
 function zrep_init() {
     local zshrc_file="${HOME}/.zshrc"
     local zrep_addons="${HOME}/.zrep_addons"
     local install_dir
+    
+    # Check for required dependencies
+    if ! zrep_check_deps; then
+        return 1
+    fi
 
     # Check if .zreprc exists
     if [[ ! -f ${ZREP_CONFIG} ]]; then
@@ -236,16 +266,20 @@ function zrep_init() {
         # Prompt user for install directory
         read "install_dir?Enter zpi installation directory [${HOME}/.zrep]: "
         install_dir=${install_dir:-"${HOME}/.zrep"}
-        mkdir -p ${install_dir}
-        read "downloader?Choose command to download packages [curl, wget, wget2]: "
-        if [[ ${downloader} != curl && ${downloader} != wget && ${downloader} != wget2 ]]; then
-            echo "Invalid choice: '$downloader'. Try again."
-            read "downloader?Choose command to download packages [curl, wget, wget2] "
-            if [[ ${downloader} != curl && ${downloader} != wget && ${downloader} != wget2 ]]; then
-                echo "Invalid choice: '$downloader'. Exiting."
-                exit
-            fi
+        mkdir -p "${install_dir}" || {
+            echo "Failed to create directory: ${install_dir}"
+            return 1
+        }
+        
+        # Choose downloader
+        local downloader=""
+        if command -v curl &> /dev/null; then
+            downloader="curl"
+        elif command -v wget &> /dev/null; then
+            downloader="wget"
         fi
+        
+        echo "Using ${downloader} for downloads"
 
         # Write to .zreprc
         cat > "${ZREP_CONFIG}" <<EOF
@@ -257,33 +291,86 @@ repo_url = https://zrep.kekepower.com
 theme = classic
 downloader = ${downloader}
 EOF
-    echo "The file '${ZREP_CONFIG}' has been created."
+        echo "The file '${ZREP_CONFIG}' has been created."
     else
-        zrep_fpath ${HOME}/.zrep/functions
-        autoload -Uz zini
         echo "Loading configuration from ${ZREP_CONFIG}"
-        zini ${ZREP_CONFIG}
-        # install_dir=${config[main_zrep_install_dir]}
+        # Ensure the install directory exists
+        install_dir=${HOME}/.zrep  # Default value
+        if [[ -f ${ZREP_CONFIG} ]]; then
+            # Extract the install directory from the config file if it exists
+            local config_install_dir=$(grep -m 1 '^zrep_install_dir' "${ZREP_CONFIG}" | cut -d'=' -f2 | tr -d '[:space:]')
+            if [[ -n "${config_install_dir}" ]]; then
+                install_dir="${config_install_dir}"
+            fi
+            mkdir -p "${install_dir}" || {
+                echo "Failed to create directory: ${install_dir}"
+                return 1
+            }
+        fi
+        
+        # Load zini if available
+        if [[ -f "${install_dir}/functions/zini/zini" ]]; then
+            fpath=("${install_dir}/functions/zini" $fpath)
+            autoload -Uz zini
+            zini ${ZREP_CONFIG}
+        fi
     fi
 
-    if [[ $(zrep_find_string zini) -eq 0 ]]; then
-        mkdir -p "${install_dir}/functions/zini"
-        zrep_global_downloader https://raw.githubusercontent.com/kekePower/zini/main/zini -o "${install_dir}/functions/zini/zini"
-        echo "Adding 'zini' path to fpath in ${zshrc_file}"
-        echo "fpath=(${install_dir}/functions/zini \$fpath)" >> ${zshrc_file}
+    # Create necessary directories
+    local dirs=(
+        "${install_dir}/functions"
+        "${install_dir}/themes"
+        "${install_dir}/packages"
+    )
+    
+    for dir in "${dirs[@]}"; do
+        if [[ ! -d "${dir}" ]]; then
+            echo "Creating directory: ${dir}"
+            mkdir -p "${dir}" || {
+                echo "Failed to create directory: ${dir}"
+                return 1
+            }
+        fi
+    done
+
+    # Install zini if not found
+    if [[ ! -f "${install_dir}/functions/zini/zini" ]]; then
+        echo "Installing zini..."
+        mkdir -p "${install_dir}/functions/zini" || {
+            echo "Failed to create directory: ${install_dir}/functions/zini"
+            return 1
+        }
+        
+        if ! zrep_global_downloader https://raw.githubusercontent.com/kekePower/zini/main/zini -o "${install_dir}/functions/zini/zini"; then
+            echo "Failed to download zini"
+            return 1
+        fi
+        
+        # Add zini to fpath in .zshrc if not already present
+        if ! grep -q "${install_dir}/functions/zini" "${zshrc_file}" 2>/dev/null; then
+            echo "Adding 'zini' path to fpath in ${zshrc_file}"
+            echo "fpath=('${install_dir}/functions/zini' \$fpath)" >> "${zshrc_file}"
+        fi
+        
+        # Ensure zini is loaded
+        fpath=("${install_dir}/functions/zini" $fpath)
         autoload -Uz zini
-    fi
-
-    # Check if .zshrc already sources .zrep_addons, if not, add it
-    if [[ $(zrep_find_string "source ${zrep_addons}") -eq 0 ]]; then
-        echo "Adding source command for .zrep_addons to .zshrc..."
-        echo "source ${zrep_addons}" >> "${zshrc_file}"
+        
+        # Load the config
+        if [[ -f "${ZREP_CONFIG}" ]]; then
+            zini "${ZREP_CONFIG}"
+        fi
     fi
 
     # Create or update the .zrep_addons file
-    if [[ ! -f ${zrep_addons} ]]; then
+    echo "Configuring zrep addons..."
+    if [[ ! -f "${zrep_addons}" ]]; then
         echo "Creating file ${zrep_addons}..."
-        touch ${install_dir}/.addons
+        touch "${install_dir}/.addons" || {
+            echo "Failed to create: ${install_dir}/.addons"
+            return 1
+        }
+        
         cat > "${zrep_addons}" <<EOF
 # Source the .addons file from the zrep installation directory
 source "${install_dir}/.addons"
@@ -291,29 +378,55 @@ source "${install_dir}/.addons"
 # If addons array is defined and not empty, add its elements to fpath
 if [[ -n \${addons[@]} ]]; then
     for addon in "\${addons[@]}"; do
-        if [[ -d \${addon} ]] && [[ ! " \${fpath[*]} " =~ " \${addon} " ]]; then
-            fpath=(\${addon} "\${fpath[@]}")  # Prepend the new addon to fpath
+        if [[ -d "\${addon}" ]] && [[ ! " \${fpath[*]} " =~ " \${addon} " ]]; then
+            fpath=("\${addon}" "\${fpath[@]}")  # Prepend the new addon to fpath
         fi
-    autoload -Uz \$(basename \${addon})
+        autoload -Uz \$(basename "\${addon}")
     done
 else
-    echo "zpi: No addons enabled."
+    echo "zpi: No addons enabled. Use 'zpi enable <package>' to enable addons."
 fi
 EOF
-        echo "File .zrep_addons created and configured."
+        echo "File ${zrep_addons} created and configured."
     else
-        echo "File .zrep_addons already exists. Review manually if update is needed."
+        echo "File ${zrep_addons} already exists. Review manually if update is needed."
     fi
 
-    if [[ ! -d ${install_dir}/themes ]]; then
-        echo "Installing the Classic theme to ${install_dir}/themes"
-        mkdir -p ${install_dir}/themes
-        zrep_global_downloader https://git.kekepower.com/kekePower/zpi/raw/branch/main/themes/classic -o ${install_dir}/themes/classic
+    # Add source to .zshrc if not present
+    if ! grep -q "source \"${zrep_addons}\"" "${zshrc_file}" 2>/dev/null; then
+        echo "Adding source command for ${zrep_addons} to ${zshrc_file}..."
+        echo -e "\n# Source zrep addons\nsource \"${zrep_addons}\"" >> "${zshrc_file}"
     fi
-    echo "zpi initialization complete."
-    echo "You should copy 'zpi' to a path in you 'PATH' so that it's accessible."
-    echo "For example '${HOME}/bin'"
-    echo "Remember to 'source ${zshrc_file}' to load the 'zpi' settings."
+
+    # Install default theme if not present
+    if [[ ! -f "${install_dir}/themes/classic" ]]; then
+        echo "Installing the Classic theme to ${install_dir}/themes"
+        if ! zrep_global_downloader https://git.kekepower.com/kekePower/zpi/raw/branch/main/themes/classic -o "${install_dir}/themes/classic"; then
+            echo "Warning: Failed to download classic theme"
+        fi
+    fi
+
+    # Create a symlink if not in PATH
+    local bin_dir="${HOME}/bin"
+    if [[ ! -d "${bin_dir}" ]]; then
+        mkdir -p "${bin_dir}" && chmod 755 "${bin_dir}" || {
+            echo "Warning: Could not create ${bin_dir}"
+            bin_dir=""
+        }
+    fi
+    
+    if [[ -n "${bin_dir}" && ! -f "${bin_dir}/zpi" ]]; then
+        echo "Creating symlink in ${bin_dir}"
+        ln -sf "$(pwd)/zpi" "${bin_dir}/zpi"
+    fi
+
+    echo -e "\n${base_colors[bold_green]}zpi initialization complete!${base_colors[end]}"
+    if [[ "${PATH}" != *"${bin_dir}"* ]]; then
+        echo -e "\n${base_colors[bold_yellow]}Note:${base_colors[end]} Add ${bin_dir} to your PATH by adding this to your ~/.zshrc:"
+        echo "  export PATH=\"${bin_dir}:\$PATH\""
+    fi
+    echo -e "\nTo start using zpi, run: ${base_colors[bold_white]}source ${zshrc_file}${base_colors[end]}"
+    echo "Then try: ${base_colors[bold_white]}zpi help${base_colors[end]} to see available commands"
 }
 
 function zrep_installed_json() {
